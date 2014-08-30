@@ -16,8 +16,8 @@ import java.io.Serializable;
 public class SerializablePairEndFASTQRecord extends PairEndFASTQRecord implements Serializable {
 
     private void setValues(PairEndFASTQRecord rec) {
+        setSeq0(rec.getSeq0());
         setSeq1(rec.getSeq1());
-        setSeq2(rec.getSeq2());
     }
 
     public SerializablePairEndFASTQRecord(PairEndFASTQRecord rec) {

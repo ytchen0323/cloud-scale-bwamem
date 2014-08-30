@@ -11,5 +11,24 @@ class MemAlnType {
   var cigar: CigarType = _   // CIGAR in the BAM encoding: opLen<<4|op; op to integer mapping: MIDSH=>01234
   var score: Int = 0
   var sub: Int = 0
+
+  /**
+    *  Make a copy of the current object
+    */
+  def copy(): MemAlnType = {
+    var aln = new MemAlnType
+    aln.pos = pos
+    aln.rid = rid
+    aln.flag = flag
+    aln.isRev = isRev
+    aln.mapq = mapq
+    aln.NM = NM
+    aln.nCigar = nCigar
+    if(nCigar > 0)
+      aln.cigar = cigar.copy
+    aln.score = score
+    aln.sub = sub
+    aln
+  }
 }
 

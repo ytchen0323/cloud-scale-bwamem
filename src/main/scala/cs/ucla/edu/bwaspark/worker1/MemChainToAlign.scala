@@ -11,6 +11,7 @@ import java.io.{FileReader, BufferedReader}
 
 object MemChainToAlign {
   val MAX_BAND_TRY = 2    
+  val MARKED = -2
 
   /**
     *  Read class (testing use)
@@ -145,7 +146,7 @@ object MemChainToAlign {
       i += 1
     }
 
-    srt = srt.sortBy(s => s.len)
+    srt = srt.sortBy(s => (s.len, s.index))
     //srt.map(s => println("(" + s.len + ", " + s.index + ")") )  // debugging message
 
     // The main for loop    
@@ -160,7 +161,7 @@ object MemChainToAlign {
       
       // no overlapping seeds; then skip extension
       if((i < regArray.curLength) && (checkoverlappingRet == chain.seeds.length)) {
-        srt(k).index = 0  // mark that seed extension has not been performed
+        srt(k).index = MARKED  // mark that seed extension has not been performed
       }
       else {
         // push the current align reg into the output list
@@ -338,7 +339,8 @@ object MemChainToAlign {
       i += 1
     }
 
-    breakIdx
+    if(isBreak) breakIdx
+    else i
   }
     
   /**
@@ -356,7 +358,7 @@ object MemChainToAlign {
     var isBreak = false
 
     while(i < chain.seeds.length && !isBreak) {
-      if(srt(i).index != 0) {
+      if(srt(i).index != MARKED) {
         val targetSeed = chain.seedsRefArray(srt(i).index)
 
         // only check overlapping if t is long enough; TODO: more efficient by early stopping
@@ -377,7 +379,8 @@ object MemChainToAlign {
       i += 1
     }
 
-    breakIdx
+    if(isBreak) breakIdx
+    else i
   }
 
   /**

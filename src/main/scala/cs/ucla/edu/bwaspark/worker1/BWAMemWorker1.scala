@@ -15,7 +15,18 @@ import cs.ucla.edu.avro.fastq._
 //2)using SW algorithm to extend each chain to all possible aligns
 object BWAMemWorker1 {
   
-  //the function which do the main task
+  /**
+    *  Perform BWAMEM worker1 function for single-end alignment
+    *
+    *  @param opt the MemOptType object, BWAMEM options
+    *  @param bwt BWT and Suffix Array
+    *  @param bns .ann, .amb files
+    *  @param pac .pac file (PAC array: uint8_t)
+    *  @param pes pes array for worker2
+    *  @param seq a read
+    *  
+    *  Return: a read with alignments 
+    */
   def bwaMemWorker1(opt: MemOptType, //BWA MEM options
                     bwt: BWTType, //BWT and Suffix Array
                     bns: BNTSeqType, //.ann, .amb files
@@ -94,5 +105,37 @@ object BWAMemWorker1 {
       assert (false)
       null
     }
+  }
+
+
+  /**
+    *  Perform BWAMEM worker1 function for pair-end alignment
+    *
+    *  @param opt the MemOptType object, BWAMEM options
+    *  @param bwt BWT and Suffix Array
+    *  @param bns .ann, .amb files
+    *  @param pac .pac file (PAC array: uint8_t)
+    *  @param pes pes array for worker2
+    *  @param pairSeqs a read with both ends
+    *  
+    *  Return: a read with alignments on both ends
+    */
+  def pairEndBwaMemWorker1(opt: MemOptType, //BWA MEM options
+                           bwt: BWTType, //BWT and Suffix Array
+                           bns: BNTSeqType, //.ann, .amb files
+                           pac: Array[Byte], //.pac file uint8_t
+                           pes: Array[MemPeStat], //pes array
+                           pairSeqs: PairEndFASTQRecord //a read
+                          ): PairEndReadType = { //all possible alignment  
+ 
+    val read0 = bwaMemWorker1(opt, bwt, bns, pac, pes, pairSeqs.seq0)
+    val read1 = bwaMemWorker1(opt, bwt, bns, pac, pes, pairSeqs.seq1)
+    var pairEndRead = new PairEndReadType
+    pairEndRead.seq0 = read0.seq
+    pairEndRead.regs0 = read0.regs
+    pairEndRead.seq1 = read1.seq
+    pairEndRead.regs1 = read1.regs
+
+    pairEndRead // return
   }
 }

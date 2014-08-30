@@ -66,12 +66,12 @@ object SAPos2RefPos {
 
       //println(k)
       //calculate new pointer position
-      var newStartPoint = (k >>> 7) << 4
+      var newStartPoint = ((k >>> 7) << 4).toInt
       //println(c)
 
-      n = (bwt.bwt(c * 2 + 1 + newStartPoint.toInt)).toLong
+      n = (bwt.bwt(c * 2 + 1 + newStartPoint)).toLong
       n = n << 32
-      n = n + (bwt.bwt(c * 2 + newStartPoint.toInt)).toLong
+      n = n + (bwt.bwt(c * 2 + newStartPoint)).toLong
       //println ("The n in bwtOcc is: " + n)
 
       //jump to the start of the first bwt cell
@@ -80,16 +80,17 @@ object SAPos2RefPos {
 
       val occIntvMask = (1l << 7) - 1l
 
-      var newEndPoint = newStartPoint + (((k >>> 5) - ((k & ~occIntvMask) >>> 5)) << 1)
+      var newEndPoint = newStartPoint + (((k >>> 5) - ((k & ~occIntvMask) >>> 5)) << 1).toInt
       //println((((k >>> 5) - ((k & ~occIntvMask) >>> 5)) << 1))
+      //println("newStartPoint: " + newStartPoint + ", newEndPoint: " + newEndPoint + ", diff: " + (newEndPoint - newStartPoint))
       while (newStartPoint < newEndPoint) {
-        n = n + occAux(((bwt.bwt(newStartPoint.toInt).toLong << 32) | (bwt.bwt(newStartPoint.toInt + 1).toLong << 32 >>> 32)), c)
+        n = n + occAux(((bwt.bwt(newStartPoint).toLong << 32) | (bwt.bwt(newStartPoint + 1).toLong << 32 >>> 32)), c)
         newStartPoint += 2
       }
       //println ("The n after loop is: " + n)
       //println (bwt.bwt(newStartPoint.toInt))
       //println (bwt.bwt(newStartPoint.toInt + 1))
-      n += occAux(((bwt.bwt(newStartPoint.toInt).toLong << 32) | (bwt.bwt(newStartPoint.toInt + 1).toLong << 32 >>> 32)) & ~((1l << ((~k & 31) << 1)) - 1), c)
+      n += occAux(((bwt.bwt(newStartPoint).toLong << 32) | (bwt.bwt(newStartPoint + 1).toLong << 32 >>> 32)) & ~((1l << ((~k & 31) << 1)) - 1), c)
       //println (n)
       if (c == 0) n -= ~k & 31
       //println ("The final n is: " + n)

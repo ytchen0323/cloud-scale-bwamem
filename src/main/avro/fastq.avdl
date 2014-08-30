@@ -10,8 +10,8 @@ record FASTQRecord {
 }
 
 record PairEndFASTQRecord {
+    FASTQRecord seq0;
     FASTQRecord seq1;
-    FASTQRecord seq2;
 }
 
 }

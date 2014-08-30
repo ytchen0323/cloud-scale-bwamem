@@ -40,7 +40,7 @@ object BNTSeqUtil {
         var endF: Long = (pacLen<<1) - 1 - begVar
         k = endF
         while(k >= (begF + 1)) {
-          seq(l) = (3 - getPac(pac, k)).toByte
+          seq(l) = (3 - ( pac((k>>>2).toInt) >>> (((~k)&3) <<1) ) & 3).toByte  // Inline getPac(pac, k)
           l += 1
           k -= 1
         }
@@ -48,13 +48,13 @@ object BNTSeqUtil {
       else {
         k = begVar
         while(k < endVar) {
-          seq(l) = getPac(pac, k).toByte
+          seq(l) = (( pac((k>>>2).toInt) >>> (((~k)&3) <<1) ) & 3).toByte  // Inline getPac(pac, k)
           k += 1
           l += 1
         }
       }
     }
-    else
+    else   // if bridging the forward-reverse boundary, return nothing
       rLen = 0
 
     (seq, rLen)//return a Tuple

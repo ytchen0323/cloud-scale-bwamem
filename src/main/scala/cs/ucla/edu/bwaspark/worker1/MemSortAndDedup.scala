@@ -18,24 +18,23 @@ object MemSortAndDedup {
     } 
     else {
       //println("before dedup, n: " + regsIn.length)
-      var regs = regArray.regs.sortBy(_.rEnd)
-      //var regs = regsIn.sortBy(r => (r.rEnd, r.rBeg))
+      //var regs = regArray.regs.sortBy(_.rEnd)
+      var regs = regArray.regs.sortBy(r => (r.rEnd, r.rBeg))
 /*
       var j = 0
+      println("#####")
       regs.foreach(r => {
         print("Reg " + j + "(")
         print(r.rBeg + ", " + r.rEnd + ", " + r.qBeg + ", " + r.qEnd + ", " + r.score + ", " + r.trueScore + ", ")
         println(r.sub + ", "  + r.csub + ", " + r.subNum + ", " + r.width + ", " + r.seedCov + ", " + r.secondary + ")")
         j += 1
         } )
-      println("####################################################")
 */      
       var i = 1
       while(i < regs.length) {
         if(regs(i).rBeg < regs(i-1).rEnd) {
           var j = i - 1
           var isBreak = false
-          //breakable {
           while(j >= 0 && regs(i).rBeg < regs(j).rEnd && !isBreak) {
             // a[j] has been excluded
             if(regs(j).qEnd != regs(j).qBeg) { 
@@ -56,10 +55,19 @@ object MemSortAndDedup {
               if(or > maskLevelRedun * mr && oq > maskLevelRedun * mq) {
                 if(regs(i).score < regs(j).score) {
                   regs(i).qEnd = regs(i).qBeg
+                  // testing
+                  //println("(i, j)=(" + i + ", " + j + ") " + or + " " + oq + " " + mr + " " + mq)
+                  //println("i: (" + regs(i).qBeg + " " + regs(i).qEnd + " " + regs(i).rBeg + " " + regs(i).rEnd + 
+                          //"); j: (" + regs(j).qBeg + " " + regs(j).qEnd + " " + regs(j).rBeg + " " + regs(j).rEnd + ")")
                   isBreak = true
                 }
-                else 
+                else {
                   regs(j).qEnd = regs(j).qBeg
+                  // testing
+                  //println("(i, j)=(" + i + ", " + j + ") " + or + " " + oq + " " + mr + " " + mq)
+                  //println("i: (" + regs(i).qBeg + " " + regs(i).qEnd + " " + regs(i).rBeg + " " + regs(i).rEnd + 
+                          //"); j: (" + regs(j).qBeg + " " + regs(j).qEnd + " " + regs(j).rBeg + " " + regs(j).rEnd + ")")
+                }
               }
             }             
  
@@ -73,6 +81,18 @@ object MemSortAndDedup {
 
       // exclude identical hits
       regs = regs.filter(r => (r.qEnd > r.qBeg))
+
+/*
+      var j = 0
+      println("#####")
+      regs.foreach(r => {
+        print("Reg " + j + "(")
+        print(r.rBeg + ", " + r.rEnd + ", " + r.qBeg + ", " + r.qEnd + ", " + r.score + ", " + r.trueScore + ", ")
+        println(r.sub + ", "  + r.csub + ", " + r.subNum + ", " + r.width + ", " + r.seedCov + ", " + r.secondary + ")")
+        j += 1
+        } )
+*/      
+
       regs = regs.sortBy(r => (- r.score, r.rBeg, r.qBeg))
       //println("1st dedup, n: " + regs.length)
       

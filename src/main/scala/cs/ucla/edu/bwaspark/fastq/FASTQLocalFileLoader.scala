@@ -36,49 +36,49 @@ class FASTQLocalFileLoader(batchedLineNum: Int) {
    def batchedRDDReader(reader: BufferedReader, sc: SparkContext, batchedNum: Int): RDD[(Null, SerializableFASTQRecord)] = {
       val charset = Charset.forName("ASCII")
       val encoder = charset.newEncoder()
-      var records = List[FASTQRecord]()
+      var records: Vector[FASTQRecord] = scala.collection.immutable.Vector.empty
       var lineNum = 0      
+      var isBreak = false
 
-      breakable {
-         while(lineNum < batchedNum) {
-            val line = reader.readLine()
-            if(line != null) {
-               //val lineFields = line.split("""\s""")
-               val lineFields = line.split(" ")
+      while(lineNum < batchedNum && !isBreak) {
+         val line = reader.readLine()
+         if(line != null) {
+            //val lineFields = line.split("""\s""")
+            val lineFields = line.split(" ")
                
-               if(lineFields.length == 1) {
-                  val name = encoder.encode( CharBuffer.wrap(lineFields(0)) ); 
-                  val seqString = reader.readLine()
-                  val seqLength = seqString.size
-                  val seq = encoder.encode( CharBuffer.wrap(seqString) )
-                  // read out the third line
-                  reader.readLine()
-                  val quality = encoder.encode( CharBuffer.wrap(reader.readLine()) )
-                  val record = new FASTQRecord(name, seq, quality, seqLength, encoder.encode( CharBuffer.wrap("") ))
-                  records = record :: records
-               } else if(lineFields.length == 2) {
-                  val name = encoder.encode( CharBuffer.wrap(lineFields(0)) );
-                  val comment = encoder.encode( CharBuffer.wrap(lineFields(1)) );
-                  val seqString = reader.readLine()
-                  val seqLength = seqString.size
-                  val seq = encoder.encode( CharBuffer.wrap(seqString) )
-                  // read out the third line
-                  reader.readLine()
-                  val quality = encoder.encode( CharBuffer.wrap(reader.readLine()) )
-                  val record = new FASTQRecord(name, seq, quality, seqLength, comment)
-                  records = record :: records
-               }
-               else
-                  println("Error: Input format not handled")
+            if(lineFields.length == 1) {
+               val name = encoder.encode( CharBuffer.wrap(lineFields(0)) ); 
+               val seqString = reader.readLine()
+               val seqLength = seqString.size
+               val seq = encoder.encode( CharBuffer.wrap(seqString) )
+               // read out the third line
+               reader.readLine()
+               val quality = encoder.encode( CharBuffer.wrap(reader.readLine()) )
+               val record = new FASTQRecord(name, seq, quality, seqLength, encoder.encode( CharBuffer.wrap("") ))
+               records = records :+ record
+            } else if(lineFields.length == 2) {
+               val name = encoder.encode( CharBuffer.wrap(lineFields(0)) );
+               val comment = encoder.encode( CharBuffer.wrap(lineFields(1)) );
+               val seqString = reader.readLine()
+               val seqLength = seqString.size
+               val seq = encoder.encode( CharBuffer.wrap(seqString) )
+               // read out the third line
+               reader.readLine()
+               val quality = encoder.encode( CharBuffer.wrap(reader.readLine()) )
+               val record = new FASTQRecord(name, seq, quality, seqLength, comment)
+               records = records :+ record
+            }
+            else
+               println("Error: Input format not handled")
 
-               lineNum += 4
-            }
-            else {
-               isEOF = true
-               break;
-            }
+            lineNum += 4
+         }
+         else {
+            isEOF = true
+            isBreak = true
          }
       }
+
 
       val serializedRecords = records.map(new SerializableFASTQRecord(_))
       val rdd = sc.parallelize(serializedRecords)
@@ -137,84 +137,83 @@ class FASTQLocalFileLoader(batchedLineNum: Int) {
    def batchedPairEndRDDReader(reader1: BufferedReader, reader2: BufferedReader, sc: SparkContext, batchedNum: Int): RDD[(Null, SerializablePairEndFASTQRecord)] = {
       val charset = Charset.forName("ASCII")
       val encoder = charset.newEncoder()
-      var records = List[PairEndFASTQRecord]()
+      var records: Vector[PairEndFASTQRecord] = scala.collection.immutable.Vector.empty
       var lineNum = 0      
-      
+      var isBreak = false
 
-      breakable {
-         while(lineNum < batchedNum) {
-            var line = reader1.readLine()
-            if(line != null) {
-               val lineFields = line.split(" ")
-               var pairEndRecord = new PairEndFASTQRecord        
+      while(lineNum < batchedNum && !isBreak) {
+         var line = reader1.readLine()
+         if(line != null) {
+            val lineFields = line.split(" ")
+            var pairEndRecord = new PairEndFASTQRecord        
        
+            if(lineFields.length == 1) {
+               val name = encoder.encode( CharBuffer.wrap(lineFields(0)) ); 
+               val seqString = reader1.readLine()
+               val seqLength = seqString.size
+               val seq = encoder.encode( CharBuffer.wrap(seqString) )
+               // read out the third line
+               reader1.readLine()
+               val quality = encoder.encode( CharBuffer.wrap(reader1.readLine()) )
+               val record = new FASTQRecord(name, seq, quality, seqLength, encoder.encode( CharBuffer.wrap("") ))
+               pairEndRecord.setSeq0(new SerializableFASTQRecord(record))
+            } else if(lineFields.length == 2) {
+               val name = encoder.encode( CharBuffer.wrap(lineFields(0)) );
+               val comment = encoder.encode( CharBuffer.wrap(lineFields(1)) );
+               val seqString = reader1.readLine()
+               val seqLength = seqString.size
+               val seq = encoder.encode( CharBuffer.wrap(seqString) )
+               // read out the third line
+               reader1.readLine()
+               val quality = encoder.encode( CharBuffer.wrap(reader1.readLine()) )
+               val record = new FASTQRecord(name, seq, quality, seqLength, comment)
+               pairEndRecord.setSeq0(new SerializableFASTQRecord(record))
+            }
+            else
+               println("Error: Input format not handled")
+
+            line = reader2.readLine
+
+            if(line == null) println("Error: the number of two FASTQ files are different")
+            else {
+                 
+               val lineFields = line.split(" ")
+                
                if(lineFields.length == 1) {
                   val name = encoder.encode( CharBuffer.wrap(lineFields(0)) ); 
-                  val seqString = reader1.readLine()
+                  val seqString = reader2.readLine()
                   val seqLength = seqString.size
                   val seq = encoder.encode( CharBuffer.wrap(seqString) )
                   // read out the third line
-                  reader1.readLine()
-                  val quality = encoder.encode( CharBuffer.wrap(reader1.readLine()) )
+                  reader2.readLine()
+                  val quality = encoder.encode( CharBuffer.wrap(reader2.readLine()) )
                   val record = new FASTQRecord(name, seq, quality, seqLength, encoder.encode( CharBuffer.wrap("") ))
                   pairEndRecord.setSeq1(new SerializableFASTQRecord(record))
                } else if(lineFields.length == 2) {
                   val name = encoder.encode( CharBuffer.wrap(lineFields(0)) );
                   val comment = encoder.encode( CharBuffer.wrap(lineFields(1)) );
-                  val seqString = reader1.readLine()
+                  val seqString = reader2.readLine()
                   val seqLength = seqString.size
                   val seq = encoder.encode( CharBuffer.wrap(seqString) )
                   // read out the third line
-                  reader1.readLine()
-                  val quality = encoder.encode( CharBuffer.wrap(reader1.readLine()) )
+                  reader2.readLine()
+                  val quality = encoder.encode( CharBuffer.wrap(reader2.readLine()) )
                   val record = new FASTQRecord(name, seq, quality, seqLength, comment)
                   pairEndRecord.setSeq1(new SerializableFASTQRecord(record))
                }
                else
                   println("Error: Input format not handled")
-
-               line = reader2.readLine
-
-               if(line == null) println("Error: the number of two FASTQ files are different")
-               else {
-                 
-                  val lineFields = line.split(" ")
-                
-                  if(lineFields.length == 1) {
-                     val name = encoder.encode( CharBuffer.wrap(lineFields(0)) ); 
-                     val seqString = reader2.readLine()
-                     val seqLength = seqString.size
-                     val seq = encoder.encode( CharBuffer.wrap(seqString) )
-                     // read out the third line
-                     reader2.readLine()
-                     val quality = encoder.encode( CharBuffer.wrap(reader2.readLine()) )
-                     val record = new FASTQRecord(name, seq, quality, seqLength, encoder.encode( CharBuffer.wrap("") ))
-                     pairEndRecord.setSeq2(new SerializableFASTQRecord(record))
-                  } else if(lineFields.length == 2) {
-                     val name = encoder.encode( CharBuffer.wrap(lineFields(0)) );
-                     val comment = encoder.encode( CharBuffer.wrap(lineFields(1)) );
-                     val seqString = reader2.readLine()
-                     val seqLength = seqString.size
-                     val seq = encoder.encode( CharBuffer.wrap(seqString) )
-                     // read out the third line
-                     reader2.readLine()
-                     val quality = encoder.encode( CharBuffer.wrap(reader2.readLine()) )
-                     val record = new FASTQRecord(name, seq, quality, seqLength, comment)
-                     pairEndRecord.setSeq2(new SerializableFASTQRecord(record))
-                  }
-                  else
-                     println("Error: Input format not handled")
-               }
+            }
  
-               records = pairEndRecord :: records
-               lineNum += 8
-            }
-            else {
-               isEOF = true
-               break;
-            }
+            records = records :+ pairEndRecord
+            lineNum += 8
+         }
+         else {
+            isEOF = true
+            isBreak = true
          }
       }
+
 
       val serializedRecords = records.map(new SerializablePairEndFASTQRecord(_))
       val rdd = sc.parallelize(serializedRecords)

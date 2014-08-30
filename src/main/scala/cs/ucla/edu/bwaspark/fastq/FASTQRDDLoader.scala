@@ -71,4 +71,42 @@ class FASTQRDDLoader(sc: SparkContext, rootFilePath: String, numDir: Int) {
       val records = sc.union(paths.map(p => RDDLoad(p)))
       records
    } 
+
+   /**
+     *  Load the Pair-End FASTQ from HDFS into RDD
+     *
+     *  @param path the input HDFS path
+     */
+   def PairEndRDDLoad(path: String): RDD[PairEndFASTQRecord] = {
+      val job = new Job(sc.hadoopConfiguration)
+      ParquetInputFormat.setReadSupportClass(job, classOf[AvroReadSupport[PairEndFASTQRecord]])
+      val records = sc.newAPIHadoopFile(path, classOf[ParquetInputFormat[PairEndFASTQRecord]], classOf[Void], classOf[PairEndFASTQRecord], ContextUtil.getConfiguration(job)).map(p => p._2)
+      records
+   }
+
+   /**
+     *  Load all directories from HDFS of the given Pair-End FASTQ file
+     *  NOTE: Currently we cannot access the HDFS directory tree structure
+     *  We ask users to input the number of subdirectories manually...
+     *  This should be changed later.  
+     */
+   def PairEndRDDLoadAll(): RDD[PairEndFASTQRecord] = {
+      //val fs = FileSystem.get(sc.hadoopConfiguration)
+      //val paths = findFiles(fs, new Path(rootFilePath))
+
+      var i = 0
+      var paths:List[String] = List()
+      
+      // numDir: the number of sub-directories in HDFS (given from user)
+      // The reason is that currently we cannot directly fetch the directory information from HDFS
+      while(i < numDir) {
+         val path = rootFilePath + "/" + i.toString
+         paths = path :: paths
+         i += 1
+      }
+
+      val records = sc.union(paths.map(p => PairEndRDDLoad(p)))
+      records
+   } 
+
 }
