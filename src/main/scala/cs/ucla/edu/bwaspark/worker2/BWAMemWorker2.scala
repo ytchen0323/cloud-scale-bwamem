@@ -3,7 +3,7 @@ package cs.ucla.edu.bwaspark.worker2
 import cs.ucla.edu.bwaspark.datatype._
 import cs.ucla.edu.bwaspark.worker2.MemMarkPrimarySe._
 import cs.ucla.edu.bwaspark.worker2.MemRegToADAMSAM._
-import cs.ucla.edu.bwaspark.worker2.MemSamPe.memSamPe
+import cs.ucla.edu.bwaspark.worker2.MemSamPe.{memSamPe, memSamPeGroup, memSamPeGroupJNI}
 import cs.ucla.edu.avro.fastq._
 
 object BWAMemWorker2 {
@@ -57,6 +57,31 @@ object BWAMemWorker2 {
     alnRegVec(0) = pairEndRead.regs0
     alnRegVec(1) = pairEndRead.regs1
     memSamPe(opt, bns, pac, pes, numProcessed, seqs, alnRegVec)
+  }
+
+
+  def pairEndBwaMemWorker2PSWBatched(opt: MemOptType, bns: BNTSeqType, pac: Array[Byte], numProcessed: Long, pes: Array[MemPeStat], 
+                                     pairEndReadArray: Array[PairEndReadType], subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String) {
+    var alnRegVecPairs: Array[Array[Array[MemAlnRegType]]] = new Array[Array[Array[MemAlnRegType]]](subBatchSize)
+    var seqsPairs: Array[PairEndFASTQRecord] = new Array[PairEndFASTQRecord](subBatchSize)
+
+    var i = 0
+    while(i < subBatchSize) {
+      alnRegVecPairs(i) = new Array[Array[MemAlnRegType]](2)
+      seqsPairs(i) = new PairEndFASTQRecord
+      seqsPairs(i).seq0 = pairEndReadArray(i).seq0
+      seqsPairs(i).seq1 = pairEndReadArray(i).seq1
+      alnRegVecPairs(i)(0) = pairEndReadArray(i).regs0
+      alnRegVecPairs(i)(1) = pairEndReadArray(i).regs1
+      i += 1
+    }
+
+    if(isPSWJNI) {
+      System.load(jniLibPath)
+      memSamPeGroupJNI(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs)
+    }
+    else
+      memSamPeGroup(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs)
   }
 }
 

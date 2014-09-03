@@ -14,6 +14,7 @@ import cs.ucla.edu.bwaspark.sam.SAMWriter
 import cs.ucla.edu.bwaspark.debug.DebugFlag._
 import cs.ucla.edu.bwaspark.fastq._
 import cs.ucla.edu.bwaspark.util.SWUtil._
+import cs.ucla.edu.avro.fastq._
 
 // for test use
 import cs.ucla.edu.bwaspark.worker2.MemRegToADAMSAM._
@@ -27,7 +28,8 @@ object FastMap {
   private val MEM_F_NO_MULTI = 0x10
 
 
-  def memMain(sc: SparkContext, fastaLocalInputPath: String, fastqHDFSInputPath: String, fastqInputFolderNum: Int) {
+  def memMain(sc: SparkContext, fastaLocalInputPath: String, fastqHDFSInputPath: String, fastqInputFolderNum: Int, batchFolderNum: Int,
+              isPSWBatched: Boolean, subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String) {
 
     if(bwaSetReadGroup("@RG\tID:HCC1954\tLB:HCC1954\tSM:HCC1954")) {
       println("Read line: " + readGroupLine)
@@ -55,19 +57,17 @@ object FastMap {
     val bwaIdxGlobal = sc.broadcast(bwaIdx, fastaLocalInputPath)  // read from local disks!!!
     val bwaMemOptGlobal = sc.broadcast(bwaMemOpt)
 
-//    var batchNum = 99010
     var n: Int = 0
-//    var numProcessed = 0
-//    var readNum = 0
+    var numProcessed: Long = 0
 
     // write SAM header
     //val samWriter = new SAMWriter("test.sam")
     //samWriter.init
     //samWriter.writeString(bwaGenSAMHeader(bwaIdx.bns))
 
-// Do only one iteration for now
-//    var i: Int = 0
-//    while(i < fastqInputFolderNum) {
+    // Process the reads in a batched fashion
+    var i: Int = 0
+    while(i < fastqInputFolderNum) {
 
       if((bwaMemOpt.flag & MEM_F_PE) > 0) {
         var pes: Array[MemPeStat] = new Array[MemPeStat](4)
@@ -80,21 +80,23 @@ object FastMap {
         // loading reads
         println("Load FASTQ files")
         val pairEndFASTQRDDLoader = new FASTQRDDLoader(sc, fastqHDFSInputPath, fastqInputFolderNum)
-        //var path = fastqHDFSInputPath + "/" + i.toString
-        //val pairEndFASTQRDD = pairEndFASTQRDDLoader.PairEndRDDLoad(path)
-        val pairEndFASTQRDD = pairEndFASTQRDDLoader.PairEndRDDLoadAll
+        val restFolderNum = fastqInputFolderNum - i
+        var pairEndFASTQRDD: RDD[PairEndFASTQRecord] = null
+        if(restFolderNum >= batchFolderNum) {
+          pairEndFASTQRDD = pairEndFASTQRDDLoader.PairEndRDDLoadOneBatch(i, batchFolderNum)
+          i += batchFolderNum
+        }
+        else {
+          pairEndFASTQRDD = pairEndFASTQRDDLoader.PairEndRDDLoadOneBatch(i, restFolderNum)
+          i += restFolderNum
+        }
 
-        // worker1
+        // Worker1 (Map step)
         println("@Worker1")
-        val reads = pairEndFASTQRDD.map( pairSeq => pairEndBwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, pairSeq) )      
-        
-        // collect RDD
-        //val regsAllReads = reads.toArray
-        //n = regsAllReads.size
-        //println("Pair-End Read Count: " + n)
+        val reads = pairEndFASTQRDD.map( pairSeq => pairEndBwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, pairSeq) ) 
+        reads.cache
 
-        val c = reads.count
-        println("Pair-End Read Count: " + c)
+        // MemPeStat (Reduce step)
         val peStatPrepRDD = reads.map( pairSeq => memPeStatPrep(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns.l_pac, pairSeq) )
         val peStatPrepArray = peStatPrepRDD.collect
         memPeStatCompute(bwaMemOptGlobal.value, peStatPrepArray, pes)
@@ -105,33 +107,40 @@ object FastMap {
           println("pes(" + j + "): " + pes(j).low + " " + pes(j).high + " " + pes(j).failed + " " + pes(j).avg + " " + pes(j).std)
           j += 1
         }
+        
+        // Worker2 (Map step)
+        // NOTE: we may need to find how to utilize the numProcessed variable!!!
+        // Batched Processing for P-SW kernel
+        if(isPSWBatched) {
+          def it2ArrayIt(iter: Iterator[PairEndReadType]): Iterator[Unit] = {
+            var counter = 0
+            var ret: Vector[Unit] = scala.collection.immutable.Vector.empty
+            var subBatch = new Array[PairEndReadType](subBatchSize)
+            while (iter.hasNext) {
+              subBatch(counter) = iter.next
+              counter = counter + 1
+              if (counter == subBatchSize) {
+                ret = ret :+ pairEndBwaMemWorker2PSWBatched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, subBatchSize, isPSWJNI, jniLibPath) 
+                counter = 0
+              }
+            }
+            if (counter != 0)
+              ret = ret :+ pairEndBwaMemWorker2PSWBatched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, counter, isPSWJNI, jniLibPath)
+            ret.toArray.iterator
+          }
 
-        reads.map(pairSeq => pairEndBwaMemWorker2(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, pairSeq) ).count
+          val count = reads.mapPartitions(it2ArrayIt).count
+          println("Count: " + count)
 
-        // testing
-        //var k = 0;
-        //peStatPrepRDD.collect.foreach( s => {
-          //println(k + " dir: " + s.dir + " dist: " + s.dist)
-          //k += 1 } )
-
-        // repartition
-        //val readsRepart = reads.coalesce(1, false)
-        //val re = readsRepart.count
-        //println("After repartition count: " + re)
-
-/*
-        var k = 0;
-        reads.collect.foreach( s => {
-          val seq1 = new String(s.seq1.getSeq.array)
-          val seq2 = new String(s.seq2.getSeq.array)
-          println(k + " Seq1: " + seq1)
-          println(k + " Seq2: " + seq2) 
-          k += 1 } )
-*/
-        // memPeStat
-        //memPeStat(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns.l_pac, n, regsAllReads, pes)
+          reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
+        }
+        // Normal read-based processing
+        else {
+          val count = reads.map(pairSeq => pairEndBwaMemWorker2(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, pairSeq) ).count
+          numProcessed += count.toLong
+        }
       }
-      // need to be modified
+      // NOTE: need to be modified!!!
       else {
         // loading reads
         println("Load FASTQ files")
@@ -144,32 +153,11 @@ object FastMap {
         println("Count: " + c)
       }
 
-      // Debugging
-/*
-      n = seqs.size
-      
-      var bpNum: Long = 0
-      var i = 0   
-      while(i < n) {
-        bpNum += seqs(i).seqLen
-        i += 1
-      }
- 
-      println("read " + n + " sequences (" + bpNum + " bp)")
-
-      //seqs.foreach(s => println(s.seq))
-
-      memProcessSeqs(bwaMemOpt, bwaIdx.bwt, bwaIdx.bns, bwaIdx.pac, numProcessed, n, seqs, null, samWriter)
-      numProcessed += n
-      
-      println("Num processed: " + numProcessed)
-*/
-//      i += 1
-//      println("i: " + i)
-//    } 
+    } 
 
     //samWriter.close
   } 
+
 
 /*
   def memProcessSeqs(opt: MemOptType, bwt: BWTType, bns: BNTSeqType, pac: Array[Byte], numProcessed: Long, n: Int, seqs: Array[FASTQSingleNode], pes0: Array[MemPeStat], samWriter: SAMWriter) {
