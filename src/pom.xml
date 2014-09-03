@@ -1,0 +1,113 @@
+<project>
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>cs.ucla.edu</groupId>
+  <artifactId>jniNative</artifactId>
+  <version>0.1.0</version>
+  <name>JNI Pair-End Smith-Waterman AVX Library</name>
+    
+  <packaging>so</packaging>
+
+  <dependencies>
+    <dependency>
+      <groupId>cs.ucla.edu</groupId>
+      <artifactId>cloud-scale-bwamem</artifactId>
+      <version>0.1.0</version>
+      <type>jar</type>
+      <scope>system</scope>
+      <systemPath>/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/cloud-scale-bwamem-0.1.0-assembly.jar</systemPath>
+    </dependency>   
+  </dependencies>
+  
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <source>1.6</source>
+          <target>1.6</target>
+        </configuration>
+      </plugin>     
+        
+      <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>native-maven-plugin</artifactId>
+          <extensions>true</extensions>
+              <configuration>
+                  <!--  trigger javah -->          
+                  <javahOS>linux</javahOS>
+          
+                  <compilerProvider>generic-classic</compilerProvider>
+                  <compilerExecutable>gcc</compilerExecutable>
+                    
+                  <linkerExecutable>gcc</linkerExecutable>
+                      <sources>
+                          <source>
+                              <directory>./main/native/</directory>
+                              <fileNames>
+                                  <fileName>jni_hello_world.c</fileName>
+                                  <fileName>jni_mate_sw.c</fileName>
+                                  <fileName>bwt.c</fileName>
+                                  <fileName>bwa.c</fileName>
+                                  <fileName>bntseq.c</fileName>
+                                  <fileName>bwamem.c</fileName>
+                                  <fileName>bwamem_pair.c</fileName>
+                                  <fileName>ksw.c</fileName>
+                                  <fileName>kstring.c</fileName>
+                                  <fileName>utils.c</fileName>
+                              </fileNames>
+                          </source>
+                      </sources>
+                    
+                      <compilerStartOptions>
+                          <compilerStartOption>-s -fPIC -O2</compilerStartOption>
+                      </compilerStartOptions>
+
+                      <linkerStartOptions>
+                          <linkerStartOption>-shared</linkerStartOption>
+                      </linkerStartOptions>
+
+              </configuration>
+                
+          <executions>
+              <execution>
+              <id>javah</id>
+              <phase>generate-sources</phase>
+              <configuration>
+                  <javahOS>linux</javahOS>
+                  <javahProvider>default</javahProvider>
+                  <!--javahOutputDirectory>${project.build.directory}/custom-javah</javahOutputDirectory-->
+                  <!--workingDirectory>${basedir}</workingDirectory-->
+                  <javahOutputDirectory>../target/custom-javah</javahOutputDirectory>
+                  <workingDirectory>../target</workingDirectory>
+                  <javahOutputFileName>jni_mate_sw.h</javahOutputFileName>
+                  <javahClassNames>
+                      <javahClassName>cs.ucla.edu.bwaspark.jni.HelloWorld</javahClassName>
+                      <javahClassName>cs.ucla.edu.bwaspark.jni.MateSWType</javahClassName>
+                      <javahClassName>cs.ucla.edu.bwaspark.jni.SeqSWType</javahClassName>
+                      <javahClassName>cs.ucla.edu.bwaspark.jni.MateSWJNI</javahClassName>
+                      <javahClassName>cs.ucla.edu.bwaspark.datatype.MemAlnRegType</javahClassName>
+                      <javahClassName>cs.ucla.edu.bwaspark.datatype.MemOptType</javahClassName>
+                      <javahClassName>cs.ucla.edu.bwaspark.datatype.MemPeStat</javahClassName>
+                      <javahClassName>cs.ucla.edu.bwaspark.datatype.FASTQSingleNode</javahClassName>
+                  </javahClassNames>
+              </configuration>
+              <goals>
+                  <goal>javah</goal>
+              </goals>
+              </execution>
+          </executions>       
+                
+      </plugin>
+    </plugins>
+  </build>
+  <profiles>
+      <profile>
+          <id>otherOutputDir</id>
+          <build>
+              <directory>../target</directory>
+          </build>
+      </profile>
+  </profiles>
+</project>
