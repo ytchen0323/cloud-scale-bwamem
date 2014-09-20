@@ -926,7 +926,8 @@ object MemSamPe {
 
   // finish the rest of computation
   private def memSamPeGroupRest(opt: MemOptType, bns: BNTSeqType,  pac: Array[Byte], pes: Array[MemPeStat], groupSize: Int, id: Long,
-                                seqsPairs: Array[Array[FASTQRecord]], seqsTransPairs: Array[Array[Array[Byte]]], alnRegVecPairs: Array[Array[Array[MemAlnRegType]]]) {
+                                seqsPairs: Array[Array[FASTQRecord]], seqsTransPairs: Array[Array[Array[Byte]]], alnRegVecPairs: Array[Array[Array[MemAlnRegType]]],
+                                isSAMStrOutput: Boolean, samStringArray: Array[Array[String]]) {
     var k = 0
     var sum = 0
     while(k < groupSize) {
@@ -1057,14 +1058,17 @@ object MemSamPe {
               var alnList0 = new Array[MemAlnType](1)
               alnList0(0) = aln0
               memAlnToSAM(bns, seqs(0), seqsTrans(0), alnList0, 0, aln1, samStr0)
-              // NOTE: temporarily comment out in Spark version
-              //seqs(0).sam = samStr0.str.dropRight(samStr0.size - samStr0.idx).mkString
               var samStr1 = new SAMString
               var alnList1 = new Array[MemAlnType](1)
               alnList1(0) = aln1
               memAlnToSAM(bns, seqs(1), seqsTrans(1), alnList1, 0, aln0, samStr1)
-              // NOTE: temporarily comment out in Spark version
-              //seqs(1).sam = samStr1.str.dropRight(samStr1.size - samStr1.idx).mkString
+
+              // Output format handling
+              // Format 1: SAM string ollected the and driver node
+              if(isSAMStrOutput) {
+                samStringArray(k)(0) = samStr0.str.dropRight(samStr0.size - samStr0.idx).mkString
+                samStringArray(k)(1) = samStr1.str.dropRight(samStr1.size - samStr1.idx).mkString
+              }
 
               if(seqs(0).name != seqs(1).name) println("[Error] paired reads have different names: " + seqs(0).name + ", " + seqs(1).name)
             
@@ -1249,7 +1253,8 @@ object MemSamPe {
 
 
   def memSamPeGroupJNI(opt: MemOptType, bns: BNTSeqType, pac: Array[Byte], pes: Array[MemPeStat], groupSize: Int, id: Long, 
-                    seqsPairsIn: Array[PairEndFASTQRecord], alnRegVecPairs: Array[Array[Array[MemAlnRegType]]]) {
+                       seqsPairsIn: Array[PairEndFASTQRecord], alnRegVecPairs: Array[Array[Array[MemAlnRegType]]],
+                       isSAMStrOutput: Boolean, samStringArray: Array[Array[String]]) {
 
     var seqsPairs = new Array[Array[FASTQRecord]](seqsPairsIn.size)
     var i = 0
@@ -1292,7 +1297,7 @@ object MemSamPe {
     val alnRegVecPairsJNI = mateSWArrayToAlnRegPairArray(groupSize, retMateSWArray)
 
     //println("memSamPeGroupRest")
-    memSamPeGroupRest(opt, bns,  pac, pes, groupSize, id, seqsPairs, seqsTransPairs, alnRegVecPairsJNI)
+    memSamPeGroupRest(opt, bns,  pac, pes, groupSize, id, seqsPairs, seqsTransPairs, alnRegVecPairsJNI, isSAMStrOutput, samStringArray)
 
     //println("memSamPeGroup done in this batch!")
   }
@@ -1300,7 +1305,8 @@ object MemSamPe {
 
 
   def memSamPeGroup(opt: MemOptType, bns: BNTSeqType, pac: Array[Byte], pes: Array[MemPeStat], groupSize: Int, id: Long, 
-                    seqsPairsIn: Array[PairEndFASTQRecord], alnRegVecPairs: Array[Array[Array[MemAlnRegType]]]) {
+                    seqsPairsIn: Array[PairEndFASTQRecord], alnRegVecPairs: Array[Array[Array[MemAlnRegType]]], 
+                    isSAMStrOutput: Boolean, samStringArray: Array[Array[String]]) {
 
     var seqsPairs = new Array[Array[FASTQRecord]](seqsPairsIn.size)
     var i = 0
@@ -1322,14 +1328,14 @@ object MemSamPe {
       k += 1
     }
 
-    println("memSamPeGroupPrepare")
+    //println("memSamPeGroupPrepare")
     val prepRet = memSamPeGroupPrepare(opt, bns, pac, pes, groupSize, alnRegVecPairs, seqsPairs)
 
-    println("memSamPeGroupMateSW")
+    //println("memSamPeGroupMateSW")
     val n = memSamPeGroupMateSW(opt, bns.l_pac, pes, groupSize, seqsPairs, seqsTransPairs, prepRet._1, alnRegVecPairs, prepRet._2)
-    println("memSamRest")
-    memSamPeGroupRest(opt, bns,  pac, pes, groupSize, id, seqsPairs, seqsTransPairs, alnRegVecPairs)
-    println("memSamPeGroup done in this batch!")
+    //println("memSamRest")
+    memSamPeGroupRest(opt, bns,  pac, pes, groupSize, id, seqsPairs, seqsTransPairs, alnRegVecPairs, isSAMStrOutput, samStringArray)
+    //println("memSamPeGroup done in this batch!")
   }
 
 

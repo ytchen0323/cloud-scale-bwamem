@@ -52,6 +52,9 @@ object BWAMEMSpark {
     val conf = new SparkConf().setAppName("Cloud Scale BWAMEM").set("spark.executor.memory", "36g").set("spark.storage.memoryFraction", "0.45").set("spark.akka.frameSize", "128").set("spark.logConf", "true").set("spark.executor.extraLibraryPath", "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so")
     val sc = new SparkContext(conf)
 
+    //val fastqLoader = new FASTQLocalFileLoader(1000000)
+    //val fastqLoader = new FASTQLocalFileLoader(2000000)
+    //val fastqLoader = new FASTQLocalFileLoader(4000000)
     //val fastqLoader = new FASTQLocalFileLoader(10000000)
     //val fastqLoader = new FASTQLocalFileLoader(40000000)
     //val fastqLoader = new FASTQLocalFileLoader(200000000)
@@ -59,12 +62,14 @@ object BWAMEMSpark {
     //fastqLoader.storeFASTQInHDFS(sc, "/home/pengwei/genomics/InputFiles/HCC1954_1.fq", "hdfs://Jc11:9000/user/ytchen/data/HCC1954_1.fq")
     //fastqLoader.storeFASTQInHDFS(sc, "/home/ytchen/genomics/data/HCC1954_1_10Mreads.fq", "hdfs://Jc11:9000/user/ytchen/data/HCC1954_1.fq")
     //fastqLoader.storePairEndFASTQInHDFS(sc, "/home/ytchen/genomics/data/HCC1954_1_10Mreads.fq", "/home/ytchen/genomics/data/HCC1954_2_10Mreads.fq", "hdfs://Jc11:9000/user/ytchen/data/HCC1954_pair.fq")
-    //fastqLoader.storePairEndFASTQInHDFS(sc, "/home/hadoopmaster/genomics/InputFiles/HCC1954_1.fq", "/home/hadoopmaster/genomics/InputFiles/HCC1954_2.fq", "hdfs://Jc11:9000/user/ytchen/data/HCC1954_all_pair.fq")
+    //fastqLoader.storePairEndFASTQInHDFS(sc, "/home/hadoopmaster/genomics/InputFiles/HCC1954_1.fq", "/home/hadoopmaster/genomics/InputFiles/HCC1954_2.fq", "hdfs://Jc11:9000/user/ytchen/data/HCC1954_pair_small_part_size.fq")
     
     //memMain(sc, "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/HCC1954_pair.fq", 3)
     //memMain(sc, "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/HCC1954_all_pair.fq", 401)
     memMain(sc, "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/HCC1954_all_pair.fq", 401, 4,
-            true, 25, true, "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so")
+            true, 10, true, "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so", true)
+    //memMain(sc, "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/HCC1954_pair_small_part_size.fq", 1001, 10,
+            //true, 10, true, "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so", true)
 
     //memMain(sc, "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/HCC1954_all_pair.fq", 401, false, 1000)
 /*

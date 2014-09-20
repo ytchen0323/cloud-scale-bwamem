@@ -29,7 +29,7 @@ object FastMap {
 
 
   def memMain(sc: SparkContext, fastaLocalInputPath: String, fastqHDFSInputPath: String, fastqInputFolderNum: Int, batchFolderNum: Int,
-              isPSWBatched: Boolean, subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String) {
+              isPSWBatched: Boolean, subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String, isSAMStringOutput: Boolean) {
 
     if(bwaSetReadGroup("@RG\tID:HCC1954\tLB:HCC1954\tSM:HCC1954")) {
       println("Read line: " + readGroupLine)
@@ -61,11 +61,12 @@ object FastMap {
     var numProcessed: Long = 0
 
     // write SAM header
-    //val samWriter = new SAMWriter("test.sam")
-    //samWriter.init
-    //samWriter.writeString(bwaGenSAMHeader(bwaIdx.bns))
+    val samWriter = new SAMWriter("test.sam")
+    samWriter.init
+    samWriter.writeString(bwaGenSAMHeader(bwaIdx.bns))
 
     // Process the reads in a batched fashion
+    //var i: Int = 970
     var i: Int = 0
     while(i < fastqInputFolderNum) {
 
@@ -94,6 +95,8 @@ object FastMap {
         // Worker1 (Map step)
         println("@Worker1")
         val reads = pairEndFASTQRDD.map( pairSeq => pairEndBwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, pairSeq) ) 
+        //val reads = pairEndFASTQRDD.map(new SerializablePairEndFASTQRecord(_)).repartition(720).map( pairSeq => pairEndBwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, pairSeq) ) 
+        //val reads = pairEndFASTQRDD.map( pairSeq => pairEndBwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, pairSeq) ).repartition(3600) 
         reads.cache
 
         // MemPeStat (Reduce step)
@@ -112,28 +115,62 @@ object FastMap {
         // NOTE: we may need to find how to utilize the numProcessed variable!!!
         // Batched Processing for P-SW kernel
         if(isPSWBatched) {
-          def it2ArrayIt(iter: Iterator[PairEndReadType]): Iterator[Unit] = {
-            var counter = 0
-            var ret: Vector[Unit] = scala.collection.immutable.Vector.empty
-            var subBatch = new Array[PairEndReadType](subBatchSize)
-            while (iter.hasNext) {
-              subBatch(counter) = iter.next
-              counter = counter + 1
-              if (counter == subBatchSize) {
-                ret = ret :+ pairEndBwaMemWorker2PSWBatched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, subBatchSize, isPSWJNI, jniLibPath) 
-                counter = 0
+          if(!isSAMStringOutput) {
+            def it2ArrayIt(iter: Iterator[PairEndReadType]): Iterator[Unit] = {
+              var counter = 0
+              var ret: Vector[Unit] = scala.collection.immutable.Vector.empty
+              var subBatch = new Array[PairEndReadType](subBatchSize)
+              while (iter.hasNext) {
+                subBatch(counter) = iter.next
+                counter = counter + 1
+                if (counter == subBatchSize) {
+                  ret = ret :+ pairEndBwaMemWorker2PSWBatched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, subBatchSize, isPSWJNI, jniLibPath) 
+                  counter = 0
+                }
               }
+              if (counter != 0)
+                ret = ret :+ pairEndBwaMemWorker2PSWBatched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, counter, isPSWJNI, jniLibPath)
+              ret.toArray.iterator
             }
-            if (counter != 0)
-              ret = ret :+ pairEndBwaMemWorker2PSWBatched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, counter, isPSWJNI, jniLibPath)
-            ret.toArray.iterator
+
+            val count = reads.mapPartitions(it2ArrayIt).count
+            println("Count: " + count)
+  
+            reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
           }
+          else {
+            def it2ArrayIt(iter: Iterator[PairEndReadType]): Iterator[Array[Array[String]]] = {
+              var counter = 0
+              var ret: Vector[Array[Array[String]]] = scala.collection.immutable.Vector.empty
+              var subBatch = new Array[PairEndReadType](subBatchSize)
+              while (iter.hasNext) {
+                subBatch(counter) = iter.next
+                counter = counter + 1
+                if (counter == subBatchSize) {
+                  ret = ret :+ pairEndBwaMemWorker2PSWBatchedSAMRet(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, subBatchSize, isPSWJNI, jniLibPath) 
+                  counter = 0
+                }
+              }
+              if (counter != 0)
+                ret = ret :+ pairEndBwaMemWorker2PSWBatchedSAMRet(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, counter, isPSWJNI, jniLibPath)
+              ret.toArray.iterator
+            }
 
-          val count = reads.mapPartitions(it2ArrayIt).count
-          println("Count: " + count)
+            val samStrings = reads.mapPartitions(it2ArrayIt).collect
+            println("Count: " + samStrings.size)
+            reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
 
-          reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
+            // Write to the output file in a sequencial way (for now)
+            samStrings.foreach(s => {
+              s.foreach(pairSeq => {
+                samWriter.writeString(pairSeq(0))
+                samWriter.writeString(pairSeq(1))
+              } )
+            } )
+  
+          }
         }
+        // NOTE: need to be modified!!!
         // Normal read-based processing
         else {
           val count = reads.map(pairSeq => pairEndBwaMemWorker2(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, pairSeq) ).count

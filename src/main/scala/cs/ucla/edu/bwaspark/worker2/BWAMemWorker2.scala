@@ -78,10 +78,41 @@ object BWAMemWorker2 {
 
     if(isPSWJNI) {
       System.load(jniLibPath)
-      memSamPeGroupJNI(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs)
+      memSamPeGroupJNI(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs, false, null)
     }
     else
-      memSamPeGroup(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs)
+      memSamPeGroup(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs, false, null)
+  }
+
+  
+  def pairEndBwaMemWorker2PSWBatchedSAMRet(opt: MemOptType, bns: BNTSeqType, pac: Array[Byte], numProcessed: Long, pes: Array[MemPeStat], 
+                                           pairEndReadArray: Array[PairEndReadType], subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String): Array[Array[String]] = {
+    var alnRegVecPairs: Array[Array[Array[MemAlnRegType]]] = new Array[Array[Array[MemAlnRegType]]](subBatchSize)
+    var seqsPairs: Array[PairEndFASTQRecord] = new Array[PairEndFASTQRecord](subBatchSize)
+    var samStringArray: Array[Array[String]] = new Array[Array[String]](subBatchSize) // return SAM string
+
+    var i = 0
+    while(i < subBatchSize) {
+      alnRegVecPairs(i) = new Array[Array[MemAlnRegType]](2)
+      samStringArray(i) = new Array[String](2)
+      seqsPairs(i) = new PairEndFASTQRecord
+      seqsPairs(i).seq0 = pairEndReadArray(i).seq0
+      seqsPairs(i).seq1 = pairEndReadArray(i).seq1
+      alnRegVecPairs(i)(0) = pairEndReadArray(i).regs0
+      alnRegVecPairs(i)(1) = pairEndReadArray(i).regs1
+      samStringArray(i)(0) = new String
+      samStringArray(i)(1) = new String
+      i += 1
+    }
+
+    if(isPSWJNI) {
+      System.load(jniLibPath)
+      memSamPeGroupJNI(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs, true, samStringArray)
+    }
+    else
+      memSamPeGroup(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs, true, samStringArray)
+
+    samStringArray
   }
 }
 
