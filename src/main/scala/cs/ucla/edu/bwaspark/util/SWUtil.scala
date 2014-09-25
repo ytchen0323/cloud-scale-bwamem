@@ -91,6 +91,7 @@ object SWUtil {
     max = mat.max // get the max score
     var maxIns = ((qLen * max + endBonus - oIns).toDouble / eIns + 1.0).toInt
     if(maxIns < 1) maxIns = 1
+    if(w > maxIns) w = maxIns  // TODO: is this necessary? (in original C implementation)
     var maxDel = ((qLen * max + endBonus - oDel).toDouble / eDel + 1.0).toInt
     if(maxDel < 1) maxDel = 1
     if(w > maxDel) w = maxDel  // TODO: is this necessary? (in original C implementation)
