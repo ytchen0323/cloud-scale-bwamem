@@ -96,13 +96,6 @@ object MemChainToAlign {
     testReadChains.foreach(r => printChains(r.chains))
   }
 
-  /**
-    *  Data structure which keep both the length of a seed and its index in the original chain
-    */
-  class SRTType(len_i: Int, index_i: Int) {
-    var len: Int = len_i
-    var index: Int = index_i
-  }
 
   /**
     *  The main function of memChainToAlign class
@@ -556,4 +549,3 @@ object MemChainToAlign {
   }
 
 }
-
