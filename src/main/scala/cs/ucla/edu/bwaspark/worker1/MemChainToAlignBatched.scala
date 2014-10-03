@@ -386,7 +386,7 @@ object MemChainToAlignBatched {
             var reg = new MemAlnRegType
             reg.width = opt.w
 	    // default values
-	    {
+	    //{
               reg.score = seedArray(i).len * opt.a
               reg.trueScore = seedArray(i).len * opt.a
               reg.qBeg = 0
@@ -395,7 +395,7 @@ object MemChainToAlignBatched {
               reg.rEnd = seedArray(i).rBeg + seedArray(i).len
               // push the current align reg into the temporary array
               newRegs(i) = reg
-            }
+            //}
             if (seedArray(i).qBeg > 0 || (seedArray(i).qBeg + seedArray(i).len) != queryLenArray(i)) {
 	      var extParam = new ExtParam
               extParam.leftQlen = seedArray(i).qBeg
