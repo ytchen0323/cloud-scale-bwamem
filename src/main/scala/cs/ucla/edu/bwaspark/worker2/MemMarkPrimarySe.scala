@@ -16,7 +16,6 @@ object MemMarkPrimarySe {
    * @param a the MemAlnRegType object
    * @param id the Long object
    */
-  //??opt a list or a object??
   def memMarkPrimarySe(opt: MemOptType, a: Array[MemAlnRegType], id: Long) : Array[MemAlnRegType] = {
     var n: Int = 0
     if(a != null) n = a.length
@@ -68,7 +67,6 @@ object MemMarkPrimarySe {
             if((eMin - bMax)>= minL * opt.maskLevel) {
               if(aVar(j).sub == 0) {
                 aVar(j).sub = aVar(i).score
-                //println("#######should come here")
               }
               if((aVar(j).score - aVar(i).score) <= tmp) aVar(j).subNum = aVar(j).subNum + 1
               breakIdx = k

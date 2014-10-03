@@ -39,26 +39,13 @@ object MemRegToADAMSAM {
     */
   def memRegToSAMSe(opt: MemOptType, bns: BNTSeqType, pac: Array[Byte], seq: FASTQRecord, seqTrans: Array[Byte], regs: Array[MemAlnRegType], extraFlag: Int, alnMate: MemAlnType) {
     var alns: MutableList[MemAlnType] = new MutableList[MemAlnType]
-/*   
-    println("[opt object] flag: " + opt.flag + " T: " + opt.T + " minSeedLen: " + opt.minSeedLen + " a: " + opt.a + " b: " + opt.b + " mapQCoefLen: " + opt.mapQCoefLen + " mapQCoefFac: " + opt.mapQCoefFac)
-*/
-/*
-    var j = 0
-    regs.foreach(r => {
-      print("Reg " + j + "(")
-      print(r.rBeg + ", " + r.rEnd + ", " + r.qBeg + ", " + r.qEnd + ", " + r.score + ", " + r.trueScore + ", ")
-      println(r.sub + ", "  + r.csub + ", " + r.subNum + ", " + r.width + ", " + r.seedCov + ", " + r.secondary + ")")
-      j += 1
-      } )
-*/
+
     if(regs != null) {
       var i = 0
       while(i < regs.length) {
         if(regs(i).score >= opt.T) {
           if(regs(i).secondary < 0 || ((opt.flag & MEM_F_ALL) > 0)) {
             if(regs(i).secondary < 0 || regs(i).score >= regs(regs(i).secondary).score * 0.5) {
-              // debugging
-              //print("Aln " + i + " " +  regs(i).score + " ")
               var aln = memRegToAln(opt, bns, pac, seq.seqLength, seqTrans, regs(i))   // NOTE: current data structure has not been obtained from RDD. We assume the length to be 101 here
               alns += aln
               aln.flag |= extraFlag   // flag secondary
@@ -75,9 +62,6 @@ object MemRegToADAMSAM {
         i += 1
       }
     }
-
-    //seqTrans.foreach(print(_))
-    //println
 
     // no alignments good enough; then write an unaligned record
 
@@ -105,19 +89,15 @@ object MemRegToADAMSAM {
   }
 
 
-  //basic hit->SAM conversion
   /**
-    *
-    @param l1
-    @param l2
-    @param score
-    @param a
-    @param q
-    @param r
-    @param w, output
+    *  basic hit->SAM conversion
+    *  @param l1
+    *  @param l2
+    *  @param score
+    *  @param a
+    *  @param q
+    *  @param r
     */
-
-   //def inferBw( l1: Int, l2: Int, score: Int, a: Int, q: Int, r: Int) : Int = {
    private def inferBw( l1: Int, l2: Int, score: Int, a: Int, q: Int, r: Int) : Int = {
      var w: Int = 0;
      if(l1 == l2 && (((l1 * a) - score) < ((q + r - a) << 1))) {
@@ -133,32 +113,10 @@ object MemRegToADAMSAM {
      w
    }
 
-   /*
-   get_rLen actually this function is barely called in the current flow
-   @param n_cigar
-   @param *cigar 
-   @param l output
-
-
-   */
-  // this one is not tested because it is never been used in 20 reads dataset
-/*
-  private def getRlen(cigarSegs: Vector[CigarSegType]) : Int = {
-    var l: Int = 0
-
-    if(cigarSegs != null) {
-      var k = 0
-      while(k < cigarSegs.size) {
-        if(cigarSegs(k).op == 0 || cigarSegs(k).op == 2) l += cigarSegs(k).len
-
-        k += 1
-      }
-    }
-    
-    l
-  }
-*/	
-
+  /**
+    *  Get the length of the reference segment
+    *  @param cigar the input cigar
+    */
   private def getRlen(cigar: CigarType) : Int = {
     var l: Int = 0
 
@@ -327,6 +285,17 @@ object MemRegToADAMSAM {
   }
 
 
+  /**
+    *  Transform the alignment registers to alignment type
+    *
+    *  @param bns the input BNTSeqType object
+    *  @param seq the input read, store as in the FASTQRecord data structure
+    *  @param seqTrans the input read after transformation to the byte array
+    *  @param alnList the input 
+    *  @param which
+    *  @param alnMate 
+    *  @param samStr
+    */
   def memAlnToSAM(bns: BNTSeqType, seq: FASTQRecord, seqTrans: Array[Byte], alnList: Array[MemAlnType], which: Int, alnMate: MemAlnType, samStr: SAMString) {
     var aln = alnList(which)
     var alnTmp = aln.copy
