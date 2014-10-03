@@ -166,7 +166,6 @@ object MemRegToADAMSAM {
       // secondary alignment
       if(reg.secondary >= 0) aln.flag |= 0x100 
 
-      //println(reg.qBeg + " " + reg.qEnd + " " + reg.rBeg + " " + reg.rEnd)
       val ret = bwaFixXref2(opt.mat, opt.oDel, opt.eDel, opt.oIns, opt.eIns, opt.w, bns, pac, seq, reg.qBeg, reg.qEnd, reg.rBeg, reg.rEnd)
       val iden = ret._5
       if(iden < 0) {
@@ -291,10 +290,10 @@ object MemRegToADAMSAM {
     *  @param bns the input BNTSeqType object
     *  @param seq the input read, store as in the FASTQRecord data structure
     *  @param seqTrans the input read after transformation to the byte array
-    *  @param alnList the input 
-    *  @param which
-    *  @param alnMate 
-    *  @param samStr
+    *  @param alnList the input alignment list
+    *  @param which the id to be processed in the alnList
+    *  @param alnMate the mate alignment
+    *  @param samStr the output SAM string
     */
   def memAlnToSAM(bns: BNTSeqType, seq: FASTQRecord, seqTrans: Array[Byte], alnList: Array[MemAlnType], which: Int, alnMate: MemAlnType, samStr: SAMString) {
     var aln = alnList(which)
@@ -322,7 +321,6 @@ object MemRegToADAMSAM {
     if(alnMateTmp != null && alnMateTmp.isRev > 0) alnTmp.flag |= 0x20 // is mate on the reverse strand
        
     // print up to CIGAR
-    //samStr.addCharArray(seq.name.toCharArray)   // QNAME
     val name = Charset.forName("ISO-8859-1").decode(seq.name).array;
     samStr.addCharArray(name)   // QNAME
     samStr.addChar('\t')
@@ -365,12 +363,8 @@ object MemRegToADAMSAM {
       if(alnTmp.rid == alnMateTmp.rid) {
         var p0: Long = -1
         var p1: Long = -1
-        //if(alnTmp.isRev > 0) p0 = alnTmp.pos + getRlen(alnTmp.cigar.cigarSegs) - 1
         if(alnTmp.isRev > 0) p0 = alnTmp.pos + getRlen(alnTmp.cigar) - 1
         else p0 = alnTmp.pos
-        //println(alnMateTmp.isRev + " " + alnMateTmp.pos)
-        //println(getRlen(alnMateTmp.cigar.cigarSegs))
-        //if(alnMateTmp.isRev > 0) p1 = alnMateTmp.pos + getRlen(alnMateTmp.cigar.cigarSegs) - 1
         if(alnMateTmp.isRev > 0) p1 = alnMateTmp.pos + getRlen(alnMateTmp.cigar) - 1
         else p1 = alnMateTmp.pos
         if(alnMateTmp.nCigar == 0 || alnTmp.nCigar == 0) samStr.addChar('0')
@@ -390,7 +384,6 @@ object MemRegToADAMSAM {
       samStr.addCharArray("*\t*".toCharArray)
     }
     else if(alnTmp.isRev == 0) {   // the forward strand
-      //println("Forward")
       var qb = 0
       var qe = seq.seqLength
 
@@ -407,12 +400,9 @@ object MemRegToADAMSAM {
       samStr.addChar('\t')
 
       val qual = Charset.forName("ISO-8859-1").decode(seq.quality).array;
-      //if(qual != "") {
       if(qual.size > 0) {
         var i = qb
-        //val seqArray = seq.qual.toCharArray
         while(i < qe) {
-          //samStr.addChar(seqArray(i))
           samStr.addChar(qual(i))
           i += 1
         }
@@ -420,7 +410,6 @@ object MemRegToADAMSAM {
       else samStr.addChar('*')
     }
     else {   // the reverse strand
-      //println("Reverse")
       var qb = 0
       var qe = seq.seqLength
       
@@ -437,12 +426,9 @@ object MemRegToADAMSAM {
       samStr.addChar('\t')
 
       val qual = Charset.forName("ISO-8859-1").decode(seq.quality).array;
-      //if(seq.qual != "") {
       if(qual.size > 0) {
         var i = qe - 1
-        //val seqArray = seq.qual.toCharArray
         while(i >= qb) {
-          //samStr.addChar(seqArray(i))
           samStr.addChar(qual(i))
           i -= 1
         }
@@ -515,10 +501,8 @@ object MemRegToADAMSAM {
     }
 
     val comment = Charset.forName("ISO-8859-1").decode(seq.comment).array;
-    //if(seq.comment != "") {
     if(comment.size > 0) {
       samStr.addChar('\t')
-      //samStr.addCharArray(seq.comment.toCharArray)
       samStr.addCharArray(comment)
     }
     samStr.addChar('\n')
@@ -570,7 +554,24 @@ object MemRegToADAMSAM {
 
   }  
 
-  // wrapper implementation only for now
+
+  /**
+    *  Check whether the reference segment range and query segment range are valid
+    *
+    *  @param mat the mat (score) array
+    *  @param oDel oDel in the input MemOptType object
+    *  @param eDel eDel in the input MemOptType object
+    *  @param oIns oIns in the input MemOptType object
+    *  @param eIns eIns in the input MemOptType object
+    *  @param w the input weight
+    *  @param bns the input BNTSeqType object
+    *  @param pac the PAC array
+    *  @param query the query (read)
+    *  @param qBeg the beginning position of the query
+    *  @param qEnd the ending position of the query
+    *  @param rBeg the beginning position of the target (reference)
+    *  @param rEnd the ending position of the target (reference)
+    */
   private def bwaFixXref2(mat: Array[Byte], oDel: Int, eDel: Int, oIns: Int, eIns: Int, w: Int, bns: BNTSeqType, 
     pac: Array[Byte], query: Array[Byte], qBeg: Int, qEnd: Int, rBeg: Long, rEnd: Long): (Int, Int, Long, Long, Int) = {
     var retArray = new Array[Int](5)
@@ -659,17 +660,32 @@ object MemRegToADAMSAM {
 
           i += 1
         }
-        // NOTE!!!: Need to be implemented!!! temporarily skip this for loop
       }
     
       var iden = 0
       if(qBegRet == qEndRet || rBegRet == rEndRet) iden = -2
-      //println(qBegRet + " " + qEndRet + " " + rBegRet + " " + rEndRet + " " + iden)
       (qBegRet, qEndRet, rBegRet, rEndRet, iden)
     }
 
   }
 
+
+  /**
+    *  Generate the Cigar string
+    *
+    *  @param mat the mat (score) array
+    *  @param oDel oDel in the input MemOptType object
+    *  @param eDel eDel in the input MemOptType object
+    *  @param oIns oIns in the input MemOptType object
+    *  @param eIns eIns in the input MemOptType object
+    *  @param w the input weight
+    *  @param pacLen the PAC array length
+    *  @param pac the PAC array
+    *  @param queryLen the length of the query array
+    *  @param query the query (read)
+    *  @param rBeg the beginning position of the target (reference)
+    *  @param rEnd the ending position of the target (reference)
+    */
   private def bwaGenCigar2(mat: Array[Byte], oDel: Int, eDel: Int, oIns: Int, eIns: Int, w: Int, pacLen: Long, pac: Array[Byte], 
     queryLen: Int, query_i: Array[Byte], rBeg: Long, rEnd: Long): (Int, Int, Int, CigarType) = {
 
@@ -713,7 +729,6 @@ object MemRegToADAMSAM {
         // no gap; no need to do DP
         if(queryLen == (rEnd - rBeg) && w == 0) {
           // FIXME: due to an issue in mem_reg2aln(), we never come to this block. This does not affect accuracy, but it hurts performance. (in original C implementation)
-          //println("ENTER!!!")
           var cigarSeg = new CigarSegType
           cigarSeg.len = queryLen 
           cigarSeg.op = 0
@@ -737,11 +752,9 @@ object MemRegToADAMSAM {
           val minWidth = abs(rlen - queryLen) + 3
           if(width < minWidth) width = minWidth
           // NW alignment
-          //val ret = SWGlobal(queryLen, query, rlen.toInt, rseq, 5, mat, oDel, eDel, oIns, eIns, width.toInt, numCigar, cigar.cigarSegs)
           val ret = SWGlobal(queryLen, query, rlen.toInt, rseq, 5, mat, oDel, eDel, oIns, eIns, width.toInt, numCigar, cigar)
           score = ret._1
           numCigar = ret._2
-          //println("maxGap " + maxGap + "; numCigar " + numCigar)
         }
        
         // compute NM and MD
@@ -756,15 +769,11 @@ object MemRegToADAMSAM {
         if(rBeg < pacLen) int2base = Array('A', 'C', 'G', 'T', 'N')
         else int2base = Array('T', 'G', 'C', 'A', 'N')        
 
-        //println("numCigar: " + numCigar)
-
         var k = 0
         while(k < numCigar) {
           val op = cigar.cigarSegs(k).op
           val len = cigar.cigarSegs(k).len
         
-          //println("op " + op + ", len " + len)
-  
           // match
           if(op == 0) {
             var i = 0
@@ -833,7 +842,9 @@ object MemRegToADAMSAM {
   }
 
 
-  def testBwaFixXref2(fileName: String, opt: MemOptType, bns: BNTSeqType, pac: Array[Byte]) {
+  // test the correctness of bwaFixXref2 function
+  //def testBwaFixXref2(fileName: String, opt: MemOptType, bns: BNTSeqType, pac: Array[Byte]) {
+  private def testBwaFixXref2(fileName: String, opt: MemOptType, bns: BNTSeqType, pac: Array[Byte]) {
     
     val reader = new BufferedReader(new FileReader(fileName))
     var line = reader.readLine

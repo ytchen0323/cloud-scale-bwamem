@@ -53,6 +53,13 @@ object MemSamPe {
     }
   }
 
+  /**
+    *  Calculate the sub-score
+    *
+    *  @param opt the input MemOptType object
+    *  @param regs the alignment array  
+    *  @return the sub score
+    */
   private def calSub(opt: MemOptType, regs: Array[MemAlnRegType]) : Int = {
     var j = 1
     var isBreak = false
@@ -64,10 +71,10 @@ object MemSamPe {
       if(regs(j).qEnd < regs(0).qEnd) eMin = regs(j).qEnd
       if(eMin > bMax) { // have overlap
         var minL = regs(0).qEnd - regs(0).qBeg
-	if(regs(j).qEnd - regs(j).qBeg < minL) minL = regs(j).qEnd - regs(j).qBeg
-	if(eMin - bMax >= minL * opt.maskLevel) { 
+        if(regs(j).qEnd - regs(j).qBeg < minL) minL = regs(j).qEnd - regs(j).qBeg
+        if(eMin - bMax >= minL * opt.maskLevel) { 
           isBreak = true
-	  j -= 1
+          j -= 1
         }
       }
 
@@ -79,7 +86,15 @@ object MemSamPe {
   }
 
 
-  // Can only be used in single node version!!!
+  /**
+    *  Calculate the pair-end statistics
+    *
+    *  @param opt the input MemOptType object
+    *  @param pacLen the length of the PAC array
+    *  @param n the number of seqs of this batch (= # of reads x 2)
+    *  @param regArray the alignment array
+    *  @param pes the pair-end statistics (output)
+    */
   def memPeStat(opt: MemOptType, pacLen: Long, n: Int, regArray: Array[MemAlnRegArrayType], pes: Array[MemPeStat]) {
     var iSize: Array[Vector[Int]] = new Array[Vector[Int]](4)
     var j = 0
@@ -198,7 +213,16 @@ object MemSamPe {
   }
 
 
-  // used for Spark map function  
+  /**
+    *
+    *  Prepare the data required by computing pair-end statistics.
+    *  The required data for the reducer can be significantly reduced after memPeStatPrep
+    *  Used as a mapper in Spark programming model.
+    *
+    *  @param opt the input MemOptType object
+    *  @param pacLen the length of the PAC array
+    *  @return the prepared data for the driver to compute pair-end statistics
+    */
   def memPeStatPrep(opt: MemOptType, pacLen: Long, pairEndRead: PairEndReadType): PeStatPrepType = {
     var r: Array[Array[MemAlnRegType]] = new Array[Array[MemAlnRegType]](2)
     var peStatPrep = new PeStatPrepType
@@ -234,7 +258,15 @@ object MemSamPe {
     peStatPrep
   }
 
-  // Compute MemPeStat at the driver node
+
+  /**
+    *  Compute MemPeStat at the driver node.
+    *  Used after the required data are collected (reducer).
+    *
+    *  @param opt the input MemOptType object
+    *  @param peStatPrepArray the prepared data from mappers for compute pair-end statistics
+    *  @param pes the pair-end statistics (output)
+    */
   def memPeStatCompute(opt: MemOptType, peStatPrepArray: Array[PeStatPrepType], pes: Array[MemPeStat]) {
     var iSize: Array[Vector[Int]] = new Array[Vector[Int]](4)
     var j = 0
@@ -324,6 +356,17 @@ object MemSamPe {
   }
    
 
+  /**
+    *  Get the reference segments, including rBeg, rEnd, ref (reference segment), and len.
+    *  Used before the batched processing.
+    *
+    *  @param pacLen the length of the PAC array
+    *  @param pac the PAC array
+    *  @param pes the pair-end statistics (output)
+    *  @param reg the alignment
+    *  @param mateSeqLen the length of the mate sequence
+    *  @return the reference segment array
+    */
   private def getAlnRegRef(pacLen: Long, pac: Array[Byte], pes: Array[MemPeStat], reg: MemAlnRegType, mateSeqLen: Int): Array[RefType] = {
     var refArray = new Array[RefType](4)
 
@@ -374,6 +417,22 @@ object MemSamPe {
     refArray
   }
 
+
+  /**
+    *  Perform mate-SW algorithm.
+    *  Prepare data for pairing single-end hits.
+    *  Used before the batched processing (pure Java version, no JNI involved).
+    *
+    *  @param opt the input MemOptType object
+    *  @param pacLen the length of the PAC array
+    *  @param pac the PAC array
+    *  @param pes the pair-end statistics (output)
+    *  @param reg the alignment
+    *  @param mateSeqLen the length of the mate sequence
+    *  @param mateRegs the alignments of the mate sequence
+    *  @param refArray the reference segment array
+    *  @return (the number of added new alignments from mate-SW, alignment array)
+    */
   private def memMateSwPreCompute(opt: MemOptType, pacLen: Long, pes: Array[MemPeStat], reg: MemAlnRegType, 
                                   mateSeqLen: Int, mateSeq: Array[Byte], mateRegs: Array[MemAlnRegType], refArray: Array[RefType]): (Int, Array[MemAlnRegType]) = {
     var mateRegsUpdated: Vector[MemAlnRegType] = scala.collection.immutable.Vector.empty
@@ -387,7 +446,6 @@ object MemSamPe {
       else skip(r) = 0
       r += 1     
     }
-    //println("[0] " + skip(0) + " " + skip(1) + " " + skip(2) + " " + skip(3))
 
     var i = 0
     if(mateRegs != null) {
@@ -416,7 +474,6 @@ object MemSamPe {
       }
     }
  
-    //println("[1] " + skip(0) + " " + skip(1) + " " + skip(2) + " " + skip(3))
     if(skip(0) + skip(1) + skip(2) + skip(3) == 4) (0, mateRegs)   // consistent pair exist; no need to perform SW
 
     // NOTE: This copy may be slow!!! May need to be modified!!!
@@ -457,7 +514,6 @@ object MemSamPe {
           val xtra = KSW_XSUBO | KSW_XSTART | xtraTmp | (opt.minSeedLen * opt.a)
           val aln = SWAlign2(mateSeqLen, seq, refArray(r).len.toInt, refArray(r).ref, 5, opt, xtra) 
           
-          //println("aln score: " + aln.score + ", xtra: " + xtra)  
           var alnTmp = new MemAlnRegType
           if(aln.score >= opt.minSeedLen && aln.qBeg >= 0) { // something goes wrong if aln.qBeg < 0
             if(isRev > 0) {
@@ -489,8 +545,7 @@ object MemSamPe {
 
         if(n > 0) {
           // Sort here!
-          //println("size: " + mateRegsUpdated.size)
-          //mateRegsUpdated.foreach(ele => println(ele.rBeg + " " + ele.rEnd + " " + ele.qBeg + " " + ele.qEnd + " " + ele.score + " " + ele.trueScore + " " + ele.sub + " " + ele.csub + " " + ele.subNum + " " + ele.width + " " + ele.seedCov + " " + ele.secondary + " " + ele.hash))
+          // May be more efficient by using insertion sort?
           mateRegsUpdated = mateRegsUpdated.sortBy(seq => (seq.score))
           regArray.regs = mateRegsUpdated.toArray
           regArray.curLength = mateRegsUpdated.size
@@ -508,7 +563,20 @@ object MemSamPe {
   }
 
 
-  // verified
+  
+  /**
+    *  Mate Smith-Waterman algorithm
+    *  Used for single read without batched processing.
+    *
+    *  @param opt the input MemOptType object
+    *  @param pacLen the length of the PAC array
+    *  @param pac the PAC array
+    *  @param pes the pair-end statistics (output)
+    *  @param reg the alignment
+    *  @param mateSeqLen the length of the mate sequence
+    *  @param mateRegs the alignments of the mate sequence
+    *  @return (the number of added new alignments from mate-SW, alignment array)
+    */
   private def memMateSw(opt: MemOptType, pacLen: Long, pac: Array[Byte], pes: Array[MemPeStat], reg: MemAlnRegType, 
                         mateSeqLen: Int, mateSeq: Array[Byte], mateRegs: Array[MemAlnRegType]): (Int, Array[MemAlnRegType]) = {
     var mateRegsUpdated: Vector[MemAlnRegType] = scala.collection.immutable.Vector.empty
@@ -522,7 +590,6 @@ object MemSamPe {
       else skip(r) = 0
       r += 1     
     }
-    //println("[0] " + skip(0) + " " + skip(1) + " " + skip(2) + " " + skip(3))
 
     var i = 0
     if(mateRegs != null) {
@@ -551,7 +618,6 @@ object MemSamPe {
       }
     }
  
-    //println("[1] " + skip(0) + " " + skip(1) + " " + skip(2) + " " + skip(3))
     if(skip(0) + skip(1) + skip(2) + skip(3) == 4) (0, mateRegs)   // consistent pair exist; no need to perform SW
  
     // NOTE!!!: performance can be further optimized to avoid the copy
@@ -663,8 +729,6 @@ object MemSamPe {
 
         if(n > 0) {
           // Sort here!
-          //println("size: " + mateRegsUpdated.size)
-          //mateRegsUpdated.foreach(ele => println(ele.rBeg + " " + ele.rEnd + " " + ele.qBeg + " " + ele.qEnd + " " + ele.score + " " + ele.trueScore + " " + ele.sub + " " + ele.csub + " " + ele.subNum + " " + ele.width + " " + ele.seedCov + " " + ele.secondary + " " + ele.hash))
           mateRegsUpdated = mateRegsUpdated.sortBy(seq => (seq.score))
           regArray.regs = mateRegsUpdated.toArray
           regArray.curLength = mateRegsUpdated.size
@@ -681,6 +745,7 @@ object MemSamPe {
     else (n, mateRegs)
   }
 
+
   /**
     *  Data structure which keeps a pair of Long integer
     */
@@ -688,6 +753,7 @@ object MemSamPe {
     var x: Long = 0
     var y: Long = 0
   } 
+
 
   /**
     *  Data structure which keeps a pair of Long integer
@@ -700,10 +766,19 @@ object MemSamPe {
   } 
 
 
-  // Verification done with the c version!!!
+  /**
+    *  Pairing single-end hits
+    *  Used for single read without batched processing.
+    *
+    *  @param opt the input MemOptType object
+    *  @param pacLen the length of the PAC array
+    *  @param pes the pair-end statistics (output)
+    *  @param alnRegVec the alignments of both ends
+    *  @param id the current read id
+    *  @return (return value, subo value, n_sub, z[2])
+    */
   private def memPair(opt: MemOptType, pacLen: Long, pes: Array[MemPeStat], alnRegVec: Array[Array[MemAlnRegType]], id: Long): (Int, Int, Int, Array[Int]) = {
     var keyVec: Vector[PairLong] = scala.collection.immutable.Vector.empty
-    //var keyUVec: Vector[QuadLong] = scala.collection.immutable.Vector.empty
     var keyUVec: Vector[PairLong] = scala.collection.immutable.Vector.empty
     var y: Array[Int] = new Array[Int](4)
     var r = 0
@@ -722,8 +797,6 @@ object MemSamPe {
         if(alnRegVec(r)(i).rBeg >= pacLen) key.x = (pacLen << 1) - 1 - alnRegVec(r)(i).rBeg   // forward position
         if(alnRegVec(r)(i).rBeg >= pacLen) key.y = (alnRegVec(r)(i).score.toLong << 32) | (i << 2) | 2 | r
         else key.y = (alnRegVec(r)(i).score.toLong << 32) | (i << 2) | 0 | r
-
-        //println("x: " + key.x + ", y: " + key.y)
 
         keyVec = keyVec :+ key
         i += 1
@@ -760,7 +833,6 @@ object MemSamPe {
                 k -= 1
               else {
                 var dist: Long = sortedKeyVec(i).x - sortedKeyVec(k).x
-                //println(k + ": " + dist)
                 if(dist > pes(dir).high) isBreak = true
                 else if(dist < pes(dir).low) k -= 1
                 else {
@@ -768,15 +840,9 @@ object MemSamPe {
                   var q: Int = ((sortedKeyVec(i).y >>> 32) + (sortedKeyVec(k).y >>> 32) + 0.721 * log(2.0 * erfc(abs(ns) * M_SQRT1_2)) * opt.a + 0.499).toInt
                   if(q < 0) q = 0
                   
-                  //var key: QuadLong = new QuadLong
                   var key: PairLong = new PairLong
                   key.y = k.toLong << 32 | i
                   key.x = q.toLong << 32 | ((hash64(key.y ^ id << 8) << 32) >>> 32) // modify from (hash64(key.y ^ id << 8) & 0xffffffff)
-                  //key.xMSB = key.x >>> 63
-                  //key.xRest = (key.x << 1) >>> 1
-                  //println("[" + sortedKeyVec(k).x + "," + sortedKeyVec(i).x + "]\t" + q + "\tdist=" + dist)
-                  //val tmp = (hash64(key.y ^ id << 8) << 32) >>> 32
-                  //println("[0] " + key.y + " " + key.x + " " + key.xMSB + " " + key.xRest + " " + tmp);
                   keyUVec = keyUVec :+ key
                   k -= 1
                 }
@@ -792,8 +858,6 @@ object MemSamPe {
       i += 1
     }
 
-    //println("keyU size: " + keyUVec.size)
-    //keyUVec.foreach(key => println(key.y + " " + key.x + " " + key.xMSB + " " + key.xRest))
     var ret = 0
     var sub = 0
     var numSub = 0
@@ -802,17 +866,13 @@ object MemSamPe {
       if(tmp < opt.oDel + opt.eDel) tmp = opt.oDel + opt.eDel
       if(tmp < opt.oIns + opt.eIns) tmp = opt.oIns + opt.eIns
       
-      //val sortedKeyUVec = keyUVec.sortBy(key => (key.xMSB, key.xRest, key.y))
       val sortedKeyUVec = keyUVec.sortBy(key => (key.x, key.y))
       var i = (sortedKeyUVec(sortedKeyUVec.size - 1).y >>> 32).toInt
       var k = (sortedKeyUVec(sortedKeyUVec.size - 1).y << 32 >>> 32).toInt
-      //println("i: " + i + ", k: " + k)
       z((sortedKeyVec(i).y & 1).toInt) = (sortedKeyVec(i).y << 32 >>> 34).toInt
       z((sortedKeyVec(k).y & 1).toInt) = (sortedKeyVec(k).y << 32 >>> 34).toInt
       ret = (sortedKeyUVec(sortedKeyUVec.size - 1).x >>> 32).toInt
       if(sortedKeyUVec.size > 1) sub = (sortedKeyUVec(sortedKeyUVec.size - 2).x >>> 32).toInt
-
-      //println("rest: " + (sortedKeyUVec(sortedKeyUVec.size - 1).xRest >>> 32) + " " + (sortedKeyUVec(sortedKeyUVec.size - 2).xRest >>> 32))
 
       i = sortedKeyUVec.size - 2
       while(i >= 0) {
@@ -826,12 +886,24 @@ object MemSamPe {
       numSub = 0
     }
 
-    //println(ret + " " + sub + " " + numSub + " " + z(0) + " " + z(1))
     (ret, sub, numSub, z)
   }
 
-
-  // prepare the reference pieces before sending them to native C Mate-SW implementation through JNI
+  /**
+    *
+    *  Prepare the reference segments before sending segments to native C Mate-SW implementation through JNI for batched processing.
+    *  This function can be also used in batched Java version.
+    *  Used in both memSamPeGroupJNI() and memSamPeGroup()
+    *
+    *  @param opt the input MemOptType object
+    *  @param bns the BNTSeqType object
+    *  @param pac the PAC array
+    *  @param pes the pair-end statistics (output)
+    *  @param groupSize the number of reads to be processed in this group
+    *  @param alnRegVecPairs the alignments packed in a paired array
+    *  @param seqsPairs the reads packed in a paired array
+    *  @return (Reference segment array, selected alignment vector)
+    */
   private def memSamPeGroupPrepare(opt: MemOptType, bns: BNTSeqType,  pac: Array[Byte], pes: Array[MemPeStat], groupSize: Int,
                                    alnRegVecPairs: Array[Array[Array[MemAlnRegType]]], seqsPairs: Array[Array[FASTQRecord]]): 
                                    (Array[Array[Array[Array[RefType]]]], Array[Array[Vector[MemAlnRegType]]]) = {
@@ -839,6 +911,11 @@ object MemSamPe {
     var alnRegTmpVecPairs: Array[Array[Vector[MemAlnRegType]]] = new Array[Array[Vector[MemAlnRegType]]](groupSize)
 
     var k = 0
+    // Array index -
+    // k: the group id
+    // i: end id (left end or right end)
+    // j: the alignment id
+    // r: the direction id
     if((opt.flag & MEM_F_NO_RESCUE) == 0) { // then perform SW for the best alignment
 
       while(k < groupSize) {     
@@ -890,13 +967,32 @@ object MemSamPe {
     (regRefArray, alnRegTmpVecPairs)
   }
 
-  // do Mate-SW (will be replaced by JNI)
+
+  /**
+    *
+    *  Perform Batched Mate-SW (Java version)
+    *
+    *  @param opt the input MemOptType object
+    *  @param pacLen the length of the PAC array
+    *  @param pes the pair-end statistics (output)
+    *  @param groupSize the number of reads to be processed in this group
+    *  @param seqsPairs the reads packed in a paired array
+    *  @param seqsTransPairs the transformed reads packed in a paired array
+    *  @param regRefArray the reference segment array
+    *  @param alnRegVecPairs the alignments packed in a paired array
+    *  @param alnRegTmpVecPairs the temporary alignments data packed in a paired vector
+    *  @return the number of added new alignments from mate-SW
+    */
   private def memSamPeGroupMateSW(opt: MemOptType, pacLen: Long, pes: Array[MemPeStat], groupSize: Int, 
                                   seqsPairs: Array[Array[FASTQRecord]], seqsTransPairs: Array[Array[Array[Byte]]], regRefArray: Array[Array[Array[Array[RefType]]]],
                                   alnRegVecPairs: Array[Array[Array[MemAlnRegType]]], alnRegTmpVecPairs: Array[Array[Vector[MemAlnRegType]]]): Int = {
     var k = 0
     var n = 0
 
+    // Array index -
+    // k: the group id
+    // i: end id (left end or right end)
+    // j: the alignment id
     if((opt.flag & MEM_F_NO_RESCUE) == 0) { // then perform SW for the best alignment
       while(k < groupSize) {
     
@@ -1126,7 +1222,6 @@ object MemSamPe {
         if(seqs(0).name != seqs(1).name) println("[Error] paired reads have different names: " + seqs(0).name + ", " + seqs(1).name)
       }
 
-      //if((k % 100) == 0) println(k)
       k += 1
     }
 

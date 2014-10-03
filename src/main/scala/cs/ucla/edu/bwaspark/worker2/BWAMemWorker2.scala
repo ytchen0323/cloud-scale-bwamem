@@ -10,13 +10,14 @@ object BWAMemWorker2 {
   private val MEM_F_PE: Int = 0x2
 
   /**
-    *  Main function of BWA-mem worker2
+    *  BWA-MEM Worker 2: used for single-end alignment
     *
     *  @param opt the input MemOptType object
     *  @param regs the alignment registers to be transformed
     *  @param bns the input BNSSeqType object
     *  @param pac the PAC array
-    *  @param seq the read (NOTE: currently we use Array[Byte] first. may need to be changed!!!)
+    *  @param seq the read (NOTE: in the distributed version, we use FASTQRecord data structure.)
+    *  @param numProcessed the number of reads that have been proceeded
     */
   def bwaMemWorker2(opt: MemOptType, regs: Array[MemAlnRegType], bns: BNTSeqType, pac: Array[Byte], seq: FASTQRecord, numProcessed: Long) {
     var regsOut: Array[MemAlnRegType] = null
@@ -49,6 +50,16 @@ object BWAMemWorker2 {
   }
 
 
+  /**
+    *  BWA-MEM Worker 2: used for pair-end alignment (No batched processing, No JNI with native libraries.)
+    *
+    *  @param opt the input MemOptType object
+    *  @param bns the input BNSSeqType object
+    *  @param pac the PAC array
+    *  @param numProcessed the number of reads that have been proceeded
+    *  @param pes the pair-end statistics array
+    *  @param pairEndRead the PairEndReadType object with both the read and the alignments information
+    */
   def pairEndBwaMemWorker2(opt: MemOptType, bns: BNTSeqType, pac: Array[Byte], numProcessed: Long, pes: Array[MemPeStat], pairEndRead: PairEndReadType) {
     var alnRegVec: Array[Array[MemAlnRegType]] = new Array[Array[MemAlnRegType]](2)
     var seqs: PairEndFASTQRecord = new PairEndFASTQRecord
@@ -60,6 +71,19 @@ object BWAMemWorker2 {
   }
 
 
+  /**
+    *  BWA-MEM Worker 2: used for pair-end alignment (batched processing + JNI with native libraries)
+    *
+    *  @param opt the input MemOptType object
+    *  @param bns the input BNSSeqType object
+    *  @param pac the PAC array
+    *  @param numProcessed the number of reads that have been proceeded
+    *  @param pes the pair-end statistics array
+    *  @param pairEndReadArray the PairEndReadType object array. Each element has both the read and the alignments information
+    *  @param subBatchSize the batch size of the number of reads to be sent to JNI library for native execution
+    *  @param isPSWJNI the Boolean flag to mark whether the JNI native library is going to be used
+    *  @param jniLibPath the JNI library path
+    */
   def pairEndBwaMemWorker2PSWBatched(opt: MemOptType, bns: BNTSeqType, pac: Array[Byte], numProcessed: Long, pes: Array[MemPeStat], 
                                      pairEndReadArray: Array[PairEndReadType], subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String) {
     var alnRegVecPairs: Array[Array[Array[MemAlnRegType]]] = new Array[Array[Array[MemAlnRegType]]](subBatchSize)
@@ -85,6 +109,20 @@ object BWAMemWorker2 {
   }
 
   
+  /**
+    *  BWA-MEM Worker 2: used for pair-end alignment (batched processing + JNI with native libraries)
+    *  In addition, the SAM string array with be returned to the driver node.
+    *
+    *  @param opt the input MemOptType object
+    *  @param bns the input BNSSeqType object
+    *  @param pac the PAC array
+    *  @param numProcessed the number of reads that have been proceeded
+    *  @param pes the pair-end statistics array
+    *  @param pairEndReadArray the PairEndReadType object array. Each element has both the read and the alignments information
+    *  @param subBatchSize the batch size of the number of reads to be sent to JNI library for native execution
+    *  @param isPSWJNI the Boolean flag to mark whether the JNI native library is going to be used
+    *  @param jniLibPath the JNI library path
+    */
   def pairEndBwaMemWorker2PSWBatchedSAMRet(opt: MemOptType, bns: BNTSeqType, pac: Array[Byte], numProcessed: Long, pes: Array[MemPeStat], 
                                            pairEndReadArray: Array[PairEndReadType], subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String): Array[Array[String]] = {
     var alnRegVecPairs: Array[Array[Array[MemAlnRegType]]] = new Array[Array[Array[MemAlnRegType]]](subBatchSize)
