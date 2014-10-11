@@ -14,6 +14,7 @@ import cs.ucla.edu.bwaspark.util.SWUtil.SWAlign2
 import cs.ucla.edu.bwaspark.worker2.MemMarkPrimarySe.{hash64, memMarkPrimarySe}
 import cs.ucla.edu.bwaspark.worker2.MemRegToADAMSAM.{memApproxMapqSe, memRegToAln, memAlnToSAM, memRegToSAMSe}
 import cs.ucla.edu.bwaspark.jni.{MateSWJNI, MateSWType, SeqSWType, RefSWType}
+import cs.ucla.edu.bwaspark.sam.SAMHeader
 import cs.ucla.edu.avro.fastq._
 
 // testing use
@@ -569,10 +570,11 @@ object MemSamPe {
     *  @param id the current read id
     *  @param seqsIn the input pair-end read (from Parquet/Avro data format)
     *  @param alnRegVec the alignments of this read
+    *  @param samHeader the SAM header required to output SAM strings
     *  @return the number of added new alignments from mate-SW
     */
   def memSamPe(opt: MemOptType, bns: BNTSeqType, pac: Array[Byte], pes: Array[MemPeStat], id: Long, 
-               seqsIn: PairEndFASTQRecord, alnRegVec: Array[Array[MemAlnRegType]]): Int = {
+               seqsIn: PairEndFASTQRecord, alnRegVec: Array[Array[MemAlnRegType]], samHeader: SAMHeader): Int = {
     var n: Int = 0
     var z: Array[Int] = new Array[Int](2)
     var subo: Int = 0
@@ -748,13 +750,13 @@ object MemSamPe {
             var samStr0 = new SAMString
             var alnList0 = new Array[MemAlnType](1)
             alnList0(0) = aln0
-            memAlnToSAM(bns, seqs(0), seqsTrans(0), alnList0, 0, aln1, samStr0)
+            memAlnToSAM(bns, seqs(0), seqsTrans(0), alnList0, 0, aln1, samHeader, samStr0)
             // NOTE: temporarily comment out in Spark version
             //seqs(0).sam = samStr0.str.dropRight(samStr0.size - samStr0.idx).mkString
             var samStr1 = new SAMString
             var alnList1 = new Array[MemAlnType](1)
             alnList1(0) = aln1
-            memAlnToSAM(bns, seqs(1), seqsTrans(1), alnList1, 0, aln0, samStr1)
+            memAlnToSAM(bns, seqs(1), seqsTrans(1), alnList1, 0, aln0, samHeader, samStr1)
             // NOTE: temporarily comment out in Spark version
             //seqs(1).sam = samStr1.str.dropRight(samStr1.size - samStr1.idx).mkString
 
@@ -810,8 +812,8 @@ object MemSamPe {
         if(pes(d).failed == 0 && dist >= pes(d).low && dist <= pes(d).high) extraFlag |= 2 
       }
 
-      memRegToSAMSe(opt, bns, pac, seqs(0), seqsTrans(0), alnRegVec(0), 0x41 | extraFlag, alnVec(1))
-      memRegToSAMSe(opt, bns, pac, seqs(1), seqsTrans(1), alnRegVec(1), 0x81 | extraFlag, alnVec(0))
+      memRegToSAMSe(opt, bns, pac, seqs(0), seqsTrans(0), alnRegVec(0), 0x41 | extraFlag, alnVec(1), samHeader)
+      memRegToSAMSe(opt, bns, pac, seqs(1), seqsTrans(1), alnRegVec(1), 0x81 | extraFlag, alnVec(0), samHeader)
 
       if(seqs(0).name != seqs(1).name) println("[Error] paired reads have different names: " + seqs(0).name + ", " + seqs(1).name)
 
@@ -1349,10 +1351,11 @@ object MemSamPe {
     *  @param alnRegVecPairs the alignments of the input pair-end reads in this group
     *  @param isSAMStrOutput whether we output SAM or not
     *  @param samStringArray the output SAM string array
+    *  @param samHeader the SAM header required to output SAM strings
     */
   private def memSamPeGroupRest(opt: MemOptType, bns: BNTSeqType,  pac: Array[Byte], pes: Array[MemPeStat], groupSize: Int, id: Long,
                                 seqsPairs: Array[Array[FASTQRecord]], seqsTransPairs: Array[Array[Array[Byte]]], alnRegVecPairs: Array[Array[Array[MemAlnRegType]]],
-                                isSAMStrOutput: Boolean, samStringArray: Array[Array[String]]) {
+                                isSAMStrOutput: Boolean, samStringArray: Array[Array[String]], samHeader: SAMHeader) {
     var k = 0
     var sum = 0
     // Array index -
@@ -1486,11 +1489,11 @@ object MemSamPe {
               var samStr0 = new SAMString
               var alnList0 = new Array[MemAlnType](1)
               alnList0(0) = aln0
-              memAlnToSAM(bns, seqs(0), seqsTrans(0), alnList0, 0, aln1, samStr0)
+              memAlnToSAM(bns, seqs(0), seqsTrans(0), alnList0, 0, aln1, samHeader, samStr0)
               var samStr1 = new SAMString
               var alnList1 = new Array[MemAlnType](1)
               alnList1(0) = aln1
-              memAlnToSAM(bns, seqs(1), seqsTrans(1), alnList1, 0, aln0, samStr1)
+              memAlnToSAM(bns, seqs(1), seqsTrans(1), alnList1, 0, aln0, samHeader, samStr1)
 
               // Output format handling
               // Format 1: SAM string ollected the and driver node
@@ -1549,8 +1552,15 @@ object MemSamPe {
           if(pes(d).failed == 0 && dist >= pes(d).low && dist <= pes(d).high) extraFlag |= 2 
         }
 
-        memRegToSAMSe(opt, bns, pac, seqs(0), seqsTrans(0), alnRegVec(0), 0x41 | extraFlag, alnVec(1))
-        memRegToSAMSe(opt, bns, pac, seqs(1), seqsTrans(1), alnRegVec(1), 0x81 | extraFlag, alnVec(0))
+        val samStr0 = memRegToSAMSe(opt, bns, pac, seqs(0), seqsTrans(0), alnRegVec(0), 0x41 | extraFlag, alnVec(1), samHeader)
+        val samStr1 = memRegToSAMSe(opt, bns, pac, seqs(1), seqsTrans(1), alnRegVec(1), 0x81 | extraFlag, alnVec(0), samHeader)
+
+        // Output format handling
+        // Format 1: SAM string ollected the and driver node
+        if(isSAMStrOutput) {
+          samStringArray(k)(0) = samStr0
+          samStringArray(k)(1) = samStr1
+        }
 
         if(seqs(0).name != seqs(1).name) println("[Error] paired reads have different names: " + seqs(0).name + ", " + seqs(1).name)
       }
@@ -1575,10 +1585,11 @@ object MemSamPe {
     *  @param alnRegVecPairs the alignments of the input pair-end reads in this group
     *  @param isSAMStrOutput whether we output SAM or not
     *  @param samStringArray the output SAM string array
+    *  @param samHeader the SAM header required to output SAM strings
     */
   def memSamPeGroup(opt: MemOptType, bns: BNTSeqType, pac: Array[Byte], pes: Array[MemPeStat], groupSize: Int, id: Long, 
                     seqsPairsIn: Array[PairEndFASTQRecord], alnRegVecPairs: Array[Array[Array[MemAlnRegType]]], 
-                    isSAMStrOutput: Boolean, samStringArray: Array[Array[String]]) {
+                    isSAMStrOutput: Boolean, samStringArray: Array[Array[String]], samHeader: SAMHeader) {
 
     var seqsPairs = new Array[Array[FASTQRecord]](seqsPairsIn.size)
     var i = 0
@@ -1606,7 +1617,7 @@ object MemSamPe {
     //println("memSamPeGroupMateSW")
     val n = memSamPeGroupMateSW(opt, bns.l_pac, pes, groupSize, seqsPairs, seqsTransPairs, prepRet._1, alnRegVecPairs, prepRet._2)
     //println("memSamRest")
-    memSamPeGroupRest(opt, bns,  pac, pes, groupSize, id, seqsPairs, seqsTransPairs, alnRegVecPairs, isSAMStrOutput, samStringArray)
+    memSamPeGroupRest(opt, bns,  pac, pes, groupSize, id, seqsPairs, seqsTransPairs, alnRegVecPairs, isSAMStrOutput, samStringArray, samHeader)
     //println("memSamPeGroup done in this batch!")
   }
 
@@ -1975,7 +1986,7 @@ object MemSamPe {
 
 
   /**
-    *  memSamPeGroup: Pair-end alignments to SAM format 
+    *  memSamPeGroupJNI: Pair-end alignments to SAM format 
     *  Used for JNI batched processing. (native C library)
     *
     *  @param opt the input MemOptType object
@@ -1988,10 +1999,11 @@ object MemSamPe {
     *  @param alnRegVecPairs the alignments of the input pair-end reads in this group
     *  @param isSAMStrOutput whether we output SAM or not
     *  @param samStringArray the output SAM string array
+    *  @param samHeader the SAM header required to output SAM strings
     */
   def memSamPeGroupJNI(opt: MemOptType, bns: BNTSeqType, pac: Array[Byte], pes: Array[MemPeStat], groupSize: Int, id: Long, 
                        seqsPairsIn: Array[PairEndFASTQRecord], alnRegVecPairs: Array[Array[Array[MemAlnRegType]]],
-                       isSAMStrOutput: Boolean, samStringArray: Array[Array[String]]) {
+                       isSAMStrOutput: Boolean, samStringArray: Array[Array[String]], samHeader: SAMHeader) {
 
     // prepare seqsPairs array
     var seqsPairs = new Array[Array[FASTQRecord]](seqsPairsIn.size)
@@ -2043,7 +2055,7 @@ object MemSamPe {
 
     // run the rest of alingment -> SAM function (Smith-Waterman algorithm to generate CIGAR string)
     //println("memSamPeGroupRest")
-    memSamPeGroupRest(opt, bns,  pac, pes, groupSize, id, seqsPairs, seqsTransPairs, alnRegVecPairsJNI, isSAMStrOutput, samStringArray)
+    memSamPeGroupRest(opt, bns,  pac, pes, groupSize, id, seqsPairs, seqsTransPairs, alnRegVecPairsJNI, isSAMStrOutput, samStringArray, samHeader)
 
     //println("memSamPeGroup done in this batch!")
   }

@@ -4,6 +4,7 @@ import cs.ucla.edu.bwaspark.datatype._
 import cs.ucla.edu.bwaspark.worker2.MemMarkPrimarySe._
 import cs.ucla.edu.bwaspark.worker2.MemRegToADAMSAM._
 import cs.ucla.edu.bwaspark.worker2.MemSamPe.{memSamPe, memSamPeGroup, memSamPeGroupJNI}
+import cs.ucla.edu.bwaspark.sam.SAMHeader
 import cs.ucla.edu.avro.fastq._
 
 object BWAMemWorker2 {
@@ -14,12 +15,14 @@ object BWAMemWorker2 {
     *
     *  @param opt the input MemOptType object
     *  @param regs the alignment registers to be transformed
-    *  @param bns the input BNSSeqType object
+    *  @param bns the input BNTSeqType object
     *  @param pac the PAC array
     *  @param seq the read (NOTE: in the distributed version, we use FASTQRecord data structure.)
     *  @param numProcessed the number of reads that have been proceeded
+    *  @param samHeader the SAM header required to output SAM strings
+    *  @return the SAM format string of the given read
     */
-  def bwaMemWorker2(opt: MemOptType, regs: Array[MemAlnRegType], bns: BNTSeqType, pac: Array[Byte], seq: FASTQRecord, numProcessed: Long) {
+  def bwaMemWorker2(opt: MemOptType, regs: Array[MemAlnRegType], bns: BNTSeqType, pac: Array[Byte], seq: FASTQRecord, numProcessed: Long, samHeader: SAMHeader): String = {
     var regsOut: Array[MemAlnRegType] = null
     if(regs != null)
       regsOut = memMarkPrimarySe(opt, regs, numProcessed)
@@ -46,7 +49,7 @@ object BWAMemWorker2 {
     val seqStr = new String(seq.getSeq.array)
     val seqTrans: Array[Byte] = seqStr.toCharArray.map(ele => locusEncode(ele))
 
-    memRegToSAMSe(opt, bns, pac, seq, seqTrans, regsOut, 0, null)
+    memRegToSAMSe(opt, bns, pac, seq, seqTrans, regsOut, 0, null, samHeader)
   }
 
 
@@ -59,15 +62,16 @@ object BWAMemWorker2 {
     *  @param numProcessed the number of reads that have been proceeded
     *  @param pes the pair-end statistics array
     *  @param pairEndRead the PairEndReadType object with both the read and the alignments information
+    *  @param samHeader the SAM header required to output SAM strings
     */
-  def pairEndBwaMemWorker2(opt: MemOptType, bns: BNTSeqType, pac: Array[Byte], numProcessed: Long, pes: Array[MemPeStat], pairEndRead: PairEndReadType) {
+  def pairEndBwaMemWorker2(opt: MemOptType, bns: BNTSeqType, pac: Array[Byte], numProcessed: Long, pes: Array[MemPeStat], pairEndRead: PairEndReadType, samHeader: SAMHeader) {
     var alnRegVec: Array[Array[MemAlnRegType]] = new Array[Array[MemAlnRegType]](2)
     var seqs: PairEndFASTQRecord = new PairEndFASTQRecord
     seqs.seq0 = pairEndRead.seq0
     seqs.seq1 = pairEndRead.seq1
     alnRegVec(0) = pairEndRead.regs0
     alnRegVec(1) = pairEndRead.regs1
-    memSamPe(opt, bns, pac, pes, numProcessed, seqs, alnRegVec)
+    memSamPe(opt, bns, pac, pes, numProcessed, seqs, alnRegVec, samHeader)
   }
 
 
@@ -83,9 +87,10 @@ object BWAMemWorker2 {
     *  @param subBatchSize the batch size of the number of reads to be sent to JNI library for native execution
     *  @param isPSWJNI the Boolean flag to mark whether the JNI native library is going to be used
     *  @param jniLibPath the JNI library path
+    *  @param samHeader the SAM header required to output SAM strings
     */
   def pairEndBwaMemWorker2PSWBatched(opt: MemOptType, bns: BNTSeqType, pac: Array[Byte], numProcessed: Long, pes: Array[MemPeStat], 
-                                     pairEndReadArray: Array[PairEndReadType], subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String) {
+                                     pairEndReadArray: Array[PairEndReadType], subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String, samHeader: SAMHeader) {
     var alnRegVecPairs: Array[Array[Array[MemAlnRegType]]] = new Array[Array[Array[MemAlnRegType]]](subBatchSize)
     var seqsPairs: Array[PairEndFASTQRecord] = new Array[PairEndFASTQRecord](subBatchSize)
 
@@ -102,10 +107,10 @@ object BWAMemWorker2 {
 
     if(isPSWJNI) {
       System.load(jniLibPath)
-      memSamPeGroupJNI(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs, false, null)
+      memSamPeGroupJNI(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs, false, null, samHeader)
     }
     else
-      memSamPeGroup(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs, false, null)
+      memSamPeGroup(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs, false, null, samHeader)
   }
 
   
@@ -122,9 +127,10 @@ object BWAMemWorker2 {
     *  @param subBatchSize the batch size of the number of reads to be sent to JNI library for native execution
     *  @param isPSWJNI the Boolean flag to mark whether the JNI native library is going to be used
     *  @param jniLibPath the JNI library path
+    *  @param samHeader the SAM header required to output SAM strings
     */
   def pairEndBwaMemWorker2PSWBatchedSAMRet(opt: MemOptType, bns: BNTSeqType, pac: Array[Byte], numProcessed: Long, pes: Array[MemPeStat], 
-                                           pairEndReadArray: Array[PairEndReadType], subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String): Array[Array[String]] = {
+                                           pairEndReadArray: Array[PairEndReadType], subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String, samHeader: SAMHeader): Array[Array[String]] = {
     var alnRegVecPairs: Array[Array[Array[MemAlnRegType]]] = new Array[Array[Array[MemAlnRegType]]](subBatchSize)
     var seqsPairs: Array[PairEndFASTQRecord] = new Array[PairEndFASTQRecord](subBatchSize)
     var samStringArray: Array[Array[String]] = new Array[Array[String]](subBatchSize) // return SAM string
@@ -145,10 +151,10 @@ object BWAMemWorker2 {
 
     if(isPSWJNI) {
       System.load(jniLibPath)
-      memSamPeGroupJNI(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs, true, samStringArray)
+      memSamPeGroupJNI(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs, true, samStringArray, samHeader)
     }
     else
-      memSamPeGroup(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs, true, samStringArray)
+      memSamPeGroup(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs, true, samStringArray, samHeader)
 
     samStringArray
   }

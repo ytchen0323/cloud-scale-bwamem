@@ -132,4 +132,26 @@ class FASTQRDDLoader(sc: SparkContext, rootFilePath: String, numDir: Int) {
       records
    } 
 
+   /**
+     *  Load the Single-End FASTQ from HDFS into RDD in a batched fashion
+     *
+     *  @param nextFolderIdx the index of the next folder to be read
+     *  @param batchFolderNum the number of folders read in this batch
+     */
+   def SingleEndRDDLoadOneBatch(nextFolderIdx: Int, batchFolderNum: Int): RDD[FASTQRecord] = {
+      var i = nextFolderIdx
+      var endFolderIdx = nextFolderIdx + batchFolderNum
+      var paths:List[String] = List()
+      
+      // numDir: the number of sub-directories in HDFS (given from user)
+      // The reason is that currently we cannot directly fetch the directory information from HDFS
+      while(i < endFolderIdx) {
+         val path = rootFilePath + "/" + i.toString
+         paths = path :: paths
+         i += 1
+      }
+
+      val records = sc.union(paths.map(p => RDDLoad(p)))
+      records
+   } 
 }

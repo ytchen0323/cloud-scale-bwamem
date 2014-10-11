@@ -9,7 +9,7 @@ import cs.ucla.edu.bwaspark.datatype._
 import cs.ucla.edu.bwaspark.worker1.BWAMemWorker1._
 import cs.ucla.edu.bwaspark.worker2.BWAMemWorker2._
 import cs.ucla.edu.bwaspark.worker2.MemSamPe._
-import cs.ucla.edu.bwaspark.sam.SAMHeader._
+import cs.ucla.edu.bwaspark.sam.SAMHeader
 import cs.ucla.edu.bwaspark.sam.SAMWriter
 import cs.ucla.edu.bwaspark.debug.DebugFlag._
 import cs.ucla.edu.bwaspark.fastq._
@@ -27,13 +27,32 @@ object FastMap {
   private val MEM_F_ALL = 0x8
   private val MEM_F_NO_MULTI = 0x10
 
+  private val packageVersion = "cloud-scale-bwamem-0.1.0"
 
-  def memMain(sc: SparkContext, fastaLocalInputPath: String, fastqHDFSInputPath: String, fastqInputFolderNum: Int, batchFolderNum: Int,
-              isPSWBatched: Boolean, subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String, isSAMStringOutput: Boolean) {
+  /**
+    *  memMain: the main function to perform read mapping
+    *
+    *  @param sc the spark context object
+    *  @param fastaLocalInputPath the local BWA index files (bns, pac, and so on)
+    *  @param fastqHDFSInputPath the raw read file stored in HDFS
+    *  @param isPairEnd perform pair-end or single-end mapping
+    *  @param fastqInputFolderNum the number of folders generated in the HDFS for the raw reads
+    *  @param batchFolderNum the number of raw read folders in a batch to be processed
+    *  @param isPSWBatched whether the pair-end Smith Waterman is performed in a batched way
+    *  @param subBatchSize the number of reads to be processed in a subbatch
+    *  @param isPSWJNI whether the native JNI library is called for better performance
+    *  @param jniLibPath the JNI library path in the local machine
+    *  @param isSAMStringOutput whether we use the SAM format file as output
+    *  @param samOutputPath the output path of the SAM file
+    */
+  def memMain(sc: SparkContext, fastaLocalInputPath: String, fastqHDFSInputPath: String, isPairEnd: Boolean, fastqInputFolderNum: Int, batchFolderNum: Int,
+              isPSWBatched: Boolean, subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String, isSAMStringOutput: Boolean, samOutputPath: String) {
 
-    if(bwaSetReadGroup("@RG\tID:HCC1954\tLB:HCC1954\tSM:HCC1954")) {
-      println("Read line: " + readGroupLine)
-      println("Read Group ID: " + bwaReadGroupID)
+    val samHeader = new SAMHeader
+
+    if(samHeader.bwaSetReadGroup("@RG\tID:HCC1954\tLB:HCC1954\tSM:HCC1954")) {
+      println("Read line: " + samHeader.readGroupLine)
+      println("Read Group ID: " + samHeader.bwaReadGroupID)
     }
     else println("Error on reading header")
 
@@ -47,583 +66,242 @@ object FastMap {
     val bwaMemOpt = new MemOptType
     bwaMemOpt.load
 
-    // set the single/pair end mode
-    // pair-end setting now!
-    bwaMemOpt.flag |= MEM_F_PE
     bwaMemOpt.flag |= MEM_F_ALL
     bwaMemOpt.flag |= MEM_F_NO_MULTI
     
+    // write SAM header
+    val samWriter = new SAMWriter(samOutputPath)
+    if(isSAMStringOutput) {
+      samWriter.init
+      samWriter.writeString(samHeader.bwaGenSAMHeader(bwaIdx.bns, packageVersion))
+    }
+
+    // pair-end read mapping
+    if(isPairEnd) {
+      bwaMemOpt.flag |= MEM_F_PE
+      memPairEndMapping(sc, fastaLocalInputPath, fastqHDFSInputPath, fastqInputFolderNum, batchFolderNum, bwaMemOpt, bwaIdx, 
+                        isPSWBatched, subBatchSize, isPSWJNI, jniLibPath, isSAMStringOutput, samWriter, samOutputPath, samHeader)
+    }
+    // single-end read mapping
+    else {
+      memSingleEndMapping(sc, fastaLocalInputPath, fastqHDFSInputPath, fastqInputFolderNum, batchFolderNum, bwaMemOpt, bwaIdx, isSAMStringOutput, samWriter, samOutputPath, samHeader)
+    }
+
+    if(isSAMStringOutput) 
+      samWriter.close
+  } 
+
+
+  /**
+    *  memSingleEndMapping: the main function to perform single-end read mapping
+    *
+    *  @param sc the spark context object
+    *  @param fastaLocalInputPath the local BWA index files (bns, pac, and so on)
+    *  @param fastqHDFSInputPath the raw read file stored in HDFS
+    *  @param fastqInputFolderNum the number of folders generated in the HDFS for the raw reads
+    *  @param batchFolderNum the number of raw read folders in a batch to be processed
+    *  @param bwaMemOpt the MemOptType object
+    *  @param bwaIdx the BWAIdxType object
+    *  @param isSAMStringOutput whether we use the SAM format file as output
+    *  @param samWriter the writer to write SAM file at the local file system
+    *  @param samOutputPath the output path of the SAM file
+    *  @param samHeader the SAM header file used for writing SAM output file
+    */
+  private def memSingleEndMapping(sc: SparkContext, fastaLocalInputPath: String, fastqHDFSInputPath: String, fastqInputFolderNum: Int, batchFolderNum: Int, 
+                                  bwaMemOpt: MemOptType, bwaIdx: BWAIdxType, isSAMStringOutput: Boolean, samWriter: SAMWriter, samOutputPath: String, samHeader: SAMHeader) 
+  {
+
     // broadcast shared variables
     val bwaIdxGlobal = sc.broadcast(bwaIdx, fastaLocalInputPath)  // read from local disks!!!
     val bwaMemOptGlobal = sc.broadcast(bwaMemOpt)
 
-    var n: Int = 0
-    var numProcessed: Long = 0
+    // Not output SAM file
+    if(!isSAMStringOutput) {
+      // loading reads
+      println("Load FASTQ files")
+      val fastqRDDLoader = new FASTQRDDLoader(sc, fastqHDFSInputPath, fastqInputFolderNum)
+      val fastqRDD = fastqRDDLoader.RDDLoadAll
 
-    // write SAM header
-    val samWriter = new SAMWriter("test.sam")
-    samWriter.init
-    samWriter.writeString(bwaGenSAMHeader(bwaIdx.bns))
+      println("@Worker1")
+      val reads = fastqRDD.map( seq => bwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, seq) )
+      println("@Worker2")
+      val c = reads.map( r => bwaMemWorker2(bwaMemOptGlobal.value, r.regs, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, r.seq, 0, samHeader) ).count
+      println("Count: " + c)
+    }
+    // output SAM file
+    else {
+      val fastqRDDLoader = new FASTQRDDLoader(sc, fastqHDFSInputPath, fastqInputFolderNum)
+      var numProcessed: Long = 0
 
-    // Process the reads in a batched fashion
-    //var i: Int = 970
-    var i: Int = 0
-    while(i < fastqInputFolderNum) {
-
-      if((bwaMemOpt.flag & MEM_F_PE) > 0) {
-        var pes: Array[MemPeStat] = new Array[MemPeStat](4)
-        var j = 0
-        while(j < 4) {
-          pes(j) = new MemPeStat
-          j += 1
-        }
-
-        // loading reads
-        println("Load FASTQ files")
-        val pairEndFASTQRDDLoader = new FASTQRDDLoader(sc, fastqHDFSInputPath, fastqInputFolderNum)
+      // Process the reads in a batched fashion
+      var i: Int = 0
+      while(i < fastqInputFolderNum) {
         val restFolderNum = fastqInputFolderNum - i
-        var pairEndFASTQRDD: RDD[PairEndFASTQRecord] = null
+        var singleEndFASTQRDD: RDD[FASTQRecord] = null
         if(restFolderNum >= batchFolderNum) {
-          pairEndFASTQRDD = pairEndFASTQRDDLoader.PairEndRDDLoadOneBatch(i, batchFolderNum)
+          singleEndFASTQRDD = fastqRDDLoader.SingleEndRDDLoadOneBatch(i, batchFolderNum)
           i += batchFolderNum
         }
         else {
-          pairEndFASTQRDD = pairEndFASTQRDDLoader.PairEndRDDLoadOneBatch(i, restFolderNum)
+          singleEndFASTQRDD = fastqRDDLoader.SingleEndRDDLoadOneBatch(i, restFolderNum)
           i += restFolderNum
         }
 
-        // Worker1 (Map step)
-        println("@Worker1")
-        val reads = pairEndFASTQRDD.map( pairSeq => pairEndBwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, pairSeq) ) 
-        //val reads = pairEndFASTQRDD.map(new SerializablePairEndFASTQRecord(_)).repartition(720).map( pairSeq => pairEndBwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, pairSeq) ) 
-        //val reads = pairEndFASTQRDD.map( pairSeq => pairEndBwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, pairSeq) ).repartition(3600) 
-        reads.cache
+        // worker1, worker2, and return SAM format strings
+        val samStrings = singleEndFASTQRDD.map(seq => bwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, seq) ).map(
+                                               r => bwaMemWorker2(bwaMemOptGlobal.value, r.regs, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, r.seq, numProcessed, samHeader) ).collect
 
-        // MemPeStat (Reduce step)
-        val peStatPrepRDD = reads.map( pairSeq => memPeStatPrep(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns.l_pac, pairSeq) )
-        val peStatPrepArray = peStatPrepRDD.collect
-        memPeStatCompute(bwaMemOptGlobal.value, peStatPrepArray, pes)
+        numProcessed += samStrings.size
 
-        println("@MemPeStat")
-        j = 0
-        while(j < 4) {
-          println("pes(" + j + "): " + pes(j).low + " " + pes(j).high + " " + pes(j).failed + " " + pes(j).avg + " " + pes(j).std)
-          j += 1
-        }
+        // Write to the output file in a sequencial way (for now)
+        samWriter.writeStringArray(samStrings)
+  
+      }
+    } 
+
+  }
+
+
+  /**
+    *  memPairEndMapping: the main function to perform pair-end read mapping
+    *
+    *  @param sc the spark context object
+    *  @param fastaLocalInputPath the local BWA index files (bns, pac, and so on)
+    *  @param fastqHDFSInputPath the raw read file stored in HDFS
+    *  @param fastqInputFolderNum the number of folders generated in the HDFS for the raw reads
+    *  @param batchFolderNum the number of raw read folders in a batch to be processed
+    *  @param bwaMemOpt the MemOptType object
+    *  @param bwaIdx the BWAIdxType object
+    *  @param isPSWBatched whether the pair-end Smith Waterman is performed in a batched way
+    *  @param subBatchSize the number of reads to be processed in a subbatch
+    *  @param isPSWJNI whether the native JNI library is called for better performance
+    *  @param jniLibPath the JNI library path in the local machine
+    *  @param isSAMStringOutput whether we use the SAM format file as output
+    *  @param samWriter the writer to write SAM file at the local file system
+    *  @param samOutputPath the output path of the SAM file
+    *  @param samHeader the SAM header file used for writing SAM output file
+    */
+  private def memPairEndMapping(sc: SparkContext, fastaLocalInputPath: String, fastqHDFSInputPath: String, fastqInputFolderNum: Int, batchFolderNum: Int, 
+                                bwaMemOpt: MemOptType, bwaIdx: BWAIdxType, isPSWBatched: Boolean, subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String, 
+                                isSAMStringOutput: Boolean, samWriter: SAMWriter, samOutputPath: String, samHeader: SAMHeader) 
+  {
+
+    // broadcast shared variables
+    val bwaIdxGlobal = sc.broadcast(bwaIdx, fastaLocalInputPath)  // read from local disks!!!
+    val bwaMemOptGlobal = sc.broadcast(bwaMemOpt)
+
+    var numProcessed: Long = 0
+    // Process the reads in a batched fashion
+    var i: Int = 0
+    while(i < fastqInputFolderNum) {
+      
+      var pes: Array[MemPeStat] = new Array[MemPeStat](4)
+      var j = 0
+      while(j < 4) {
+        pes(j) = new MemPeStat
+        j += 1
+      }
+
+      // loading reads
+      println("Load FASTQ files")
+      val pairEndFASTQRDDLoader = new FASTQRDDLoader(sc, fastqHDFSInputPath, fastqInputFolderNum)
+      val restFolderNum = fastqInputFolderNum - i
+      var pairEndFASTQRDD: RDD[PairEndFASTQRecord] = null
+      if(restFolderNum >= batchFolderNum) {
+        pairEndFASTQRDD = pairEndFASTQRDDLoader.PairEndRDDLoadOneBatch(i, batchFolderNum)
+        i += batchFolderNum
+      }
+      else {
+        pairEndFASTQRDD = pairEndFASTQRDDLoader.PairEndRDDLoadOneBatch(i, restFolderNum)
+        i += restFolderNum
+      }
+
+      // Worker1 (Map step)
+      println("@Worker1")
+      val reads = pairEndFASTQRDD.map( pairSeq => pairEndBwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, pairSeq) ) 
+      reads.cache
+
+      // MemPeStat (Reduce step)
+      val peStatPrepRDD = reads.map( pairSeq => memPeStatPrep(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns.l_pac, pairSeq) )
+      val peStatPrepArray = peStatPrepRDD.collect
+      memPeStatCompute(bwaMemOptGlobal.value, peStatPrepArray, pes)
+
+      println("@MemPeStat")
+      j = 0
+      while(j < 4) {
+        println("pes(" + j + "): " + pes(j).low + " " + pes(j).high + " " + pes(j).failed + " " + pes(j).avg + " " + pes(j).std)
+        j += 1
+      }
         
-        // Worker2 (Map step)
-        // NOTE: we may need to find how to utilize the numProcessed variable!!!
-        // Batched Processing for P-SW kernel
-        if(isPSWBatched) {
-          if(!isSAMStringOutput) {
-            def it2ArrayIt(iter: Iterator[PairEndReadType]): Iterator[Unit] = {
-              var counter = 0
-              var ret: Vector[Unit] = scala.collection.immutable.Vector.empty
-              var subBatch = new Array[PairEndReadType](subBatchSize)
-              while (iter.hasNext) {
-                subBatch(counter) = iter.next
-                counter = counter + 1
-                if (counter == subBatchSize) {
-                  ret = ret :+ pairEndBwaMemWorker2PSWBatched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, subBatchSize, isPSWJNI, jniLibPath) 
-                  counter = 0
-                }
+      // Worker2 (Map step)
+      // NOTE: we may need to find how to utilize the numProcessed variable!!!
+      // Batched Processing for P-SW kernel
+      if(isPSWBatched) {
+        // Not output SAM format file
+        if(!isSAMStringOutput) {
+          def it2ArrayIt(iter: Iterator[PairEndReadType]): Iterator[Unit] = {
+            var counter = 0
+            var ret: Vector[Unit] = scala.collection.immutable.Vector.empty
+            var subBatch = new Array[PairEndReadType](subBatchSize)
+            while (iter.hasNext) {
+              subBatch(counter) = iter.next
+              counter = counter + 1
+              if (counter == subBatchSize) {
+                ret = ret :+ pairEndBwaMemWorker2PSWBatched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, subBatchSize, isPSWJNI, jniLibPath, samHeader) 
+                counter = 0
               }
-              if (counter != 0)
-                ret = ret :+ pairEndBwaMemWorker2PSWBatched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, counter, isPSWJNI, jniLibPath)
-              ret.toArray.iterator
             }
-
-            val count = reads.mapPartitions(it2ArrayIt).count
-            println("Count: " + count)
-  
-            reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
+            if (counter != 0)
+              ret = ret :+ pairEndBwaMemWorker2PSWBatched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, counter, isPSWJNI, jniLibPath, samHeader)
+            ret.toArray.iterator
           }
-          else {
-            def it2ArrayIt(iter: Iterator[PairEndReadType]): Iterator[Array[Array[String]]] = {
-              var counter = 0
-              var ret: Vector[Array[Array[String]]] = scala.collection.immutable.Vector.empty
-              var subBatch = new Array[PairEndReadType](subBatchSize)
-              while (iter.hasNext) {
-                subBatch(counter) = iter.next
-                counter = counter + 1
-                if (counter == subBatchSize) {
-                  ret = ret :+ pairEndBwaMemWorker2PSWBatchedSAMRet(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, subBatchSize, isPSWJNI, jniLibPath) 
-                  counter = 0
-                }
-              }
-              if (counter != 0)
-                ret = ret :+ pairEndBwaMemWorker2PSWBatchedSAMRet(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, counter, isPSWJNI, jniLibPath)
-              ret.toArray.iterator
-            }
 
-            val samStrings = reads.mapPartitions(it2ArrayIt).collect
-            println("Count: " + samStrings.size)
-            reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
-
-            // Write to the output file in a sequencial way (for now)
-            samStrings.foreach(s => {
-              s.foreach(pairSeq => {
-                samWriter.writeString(pairSeq(0))
-                samWriter.writeString(pairSeq(1))
-              } )
-            } )
-  
-          }
+          val count = reads.mapPartitions(it2ArrayIt).count
+          println("Count: " + count)
+ 
+          reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
         }
-        // NOTE: need to be modified!!!
-        // Normal read-based processing
+        // Output SAM format file
         else {
-          val count = reads.map(pairSeq => pairEndBwaMemWorker2(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, pairSeq) ).count
-          numProcessed += count.toLong
+          def it2ArrayIt(iter: Iterator[PairEndReadType]): Iterator[Array[Array[String]]] = {
+            var counter = 0
+            var ret: Vector[Array[Array[String]]] = scala.collection.immutable.Vector.empty
+            var subBatch = new Array[PairEndReadType](subBatchSize)
+            while (iter.hasNext) {
+              subBatch(counter) = iter.next
+              counter = counter + 1
+              if (counter == subBatchSize) {
+                ret = ret :+ pairEndBwaMemWorker2PSWBatchedSAMRet(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, subBatchSize, isPSWJNI, jniLibPath, samHeader) 
+                counter = 0
+              }
+            }
+            if (counter != 0)
+              ret = ret :+ pairEndBwaMemWorker2PSWBatchedSAMRet(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, counter, isPSWJNI, jniLibPath, samHeader)
+            ret.toArray.iterator
+          }
+ 
+          val samStrings = reads.mapPartitions(it2ArrayIt).collect
+          println("Count: " + samStrings.size)
+          reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
+ 
+          // Write to the output file in a sequencial way (for now)
+          samStrings.foreach(s => {
+            s.foreach(pairSeq => {
+              samWriter.writeString(pairSeq(0))
+              samWriter.writeString(pairSeq(1))
+            } )
+          } )
+  
         }
       }
       // NOTE: need to be modified!!!
+      // Normal read-based processing
       else {
-        // loading reads
-        println("Load FASTQ files")
-        val fastqRDDLoader = new FASTQRDDLoader(sc, fastqHDFSInputPath, fastqInputFolderNum)
-        val fastqRDD = fastqRDDLoader.RDDLoadAll
-
-        println("@Worker1")
-        val reads = fastqRDD.map( seq => bwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, seq) )
-        val c = reads.count
-        println("Count: " + c)
+        val count = reads.map(pairSeq => pairEndBwaMemWorker2(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, pairSeq, samHeader) ).count
+        numProcessed += count.toLong
       }
 
     } 
-
-    //samWriter.close
-  } 
-
-
-/*
-  def memProcessSeqs(opt: MemOptType, bwt: BWTType, bns: BNTSeqType, pac: Array[Byte], numProcessed: Long, n: Int, seqs: Array[FASTQSingleNode], pes0: Array[MemPeStat], samWriter: SAMWriter) {
-
-    var pes: Array[MemPeStat] = new Array[MemPeStat](4)   
-    var j = 0
-    while(j < 4) {
-      pes(j) = new MemPeStat
-      j += 1
-    }
-
-    // worker1
-    // find mapping positions
-    println("@Worker1")
-    var i = 0
-    var regsAllReads: Array[MemAlnRegArrayType] = new Array[MemAlnRegArrayType](seqs.length)
-
-    if((opt.flag & MEM_F_PE) == 0) {
-      while(i < seqs.length) {
-        regsAllReads(i) = bwaMemWorker1(opt, bwt, bns, pac, seqs(i).seqLen, seqs(i).seq)
-        i += 1
-        if((i % 10000) == 0) println(i)
-      }
-    }
-    else {
-      while(i < seqs.length) {
-        regsAllReads(i) = bwaMemWorker1(opt, bwt, bns, pac, seqs(i).seqLen, seqs(i).seq)
-        i += 1
-        regsAllReads(i) = bwaMemWorker1(opt, bwt, bns, pac, seqs(i).seqLen, seqs(i).seq)
-        i += 1
-
-        if((i % 10000) == 0) println(i)
-      }
-    }
-
-    var testReads = new Array[testRead](seqs.length)
-    i = 0
-    while(i < seqs.length) {
-      var read = new testRead
-      read.seq = seqs(i)
-      read.regs = regsAllReads(i)
-      testReads(i) = read
-      i += 1
-    }
-
-   
-    println("@MemPeStat")
-    if((opt.flag & MEM_F_PE) > 0) { // infer insert sizes if not provided
-      if(pes0 != null) // if pes0 != NULL, set the insert-size distribution as pes0
-        pes = pes0
-      else // otherwise, infer the insert size distribution from data
-        memPeStat(opt, bns.l_pac, n, regsAllReads, pes)
-    }    
-
-    println("@Worker2")
-    i = 0
-    if((opt.flag & MEM_F_PE) == 0) {
-      testReads.foreach(read => {
-        bwaMemWorker2(opt, read.regs.regs, bns, pac, read.seq, 0) 
-        i += 1
-        if((i % 10000) == 0) println(i) } )
-    }
-    else {
-
-      while(i < testReads.size) {
-        var alnRegVec: Array[Array[MemAlnRegType]] = new Array[Array[MemAlnRegType]](2)
-        var seqs: Array[FASTQSingleNode] = new Array[FASTQSingleNode](2)
-      
-        if(testReads(i).regs != null) 
-          alnRegVec(0) = testReads(i).regs.regs
-        seqs(0) = testReads(i).seq
-        if(testReads(i + 1).regs != null) 
-          alnRegVec(1) = testReads(i + 1).regs.regs
-        seqs(1) = testReads(i + 1).seq
-        bwaMemWorker2Pair(opt, alnRegVec, bns, pac, seqs, (numProcessed + i) >> 1, pes)      
-
-        i += 2
-        if((i % 1000) == 0) println(i)
-      }
-    }
-
-// Batched
-//////
-      var seqsPairs: Array[Array[FASTQSingleNode]] = new Array[Array[FASTQSingleNode]](testReads.size >> 1)
-      var alnRegVecPairs: Array[Array[Array[MemAlnRegType]]] = new Array[Array[Array[MemAlnRegType]]](testReads.size >> 1)
-      var idx = 0
-
-      while(i < testReads.size) {
-        var alnRegVec: Array[Array[MemAlnRegType]] = new Array[Array[MemAlnRegType]](2)
-        var seqs: Array[FASTQSingleNode] = new Array[FASTQSingleNode](2)
-      
-        if(testReads(i).regs != null) 
-          alnRegVec(0) = testReads(i).regs.regs
-        seqs(0) = testReads(i).seq
-        if(testReads(i + 1).regs != null) 
-          alnRegVec(1) = testReads(i + 1).regs.regs
-        seqs(1) = testReads(i + 1).seq
-
-        seqsPairs(idx) = new Array[FASTQSingleNode](2)
-        seqsPairs(idx)(0) = seqs(0)
-        seqsPairs(idx)(1) = seqs(1)
-        alnRegVecPairs(idx) = new Array[Array[MemAlnRegType]](2)
-        alnRegVecPairs(idx)(0) = alnRegVec(0)
-        alnRegVecPairs(idx)(1) = alnRegVec(1)
-
-        idx += 1
-        i += 2
-        //if((i % 1000) == 0) println(i)
-      }
-
-      memSamPeGroup(opt, bns, pac, pes, testReads.size >> 1, numProcessed >> 1, seqsPairs, alnRegVecPairs)
-
-    }
-//////
-    //testReads.foreach(r => samWriter.writeString((r.seq.sam)))
-
-  }
-*/
-/*
-  def memMainJNI() {
-
-    if(bwaSetReadGroup("@RG\tID:HCC1954\tLB:HCC1954\tSM:HCC1954")) {
-      println("Read line: " + readGroupLine)
-      println("Read Group ID: " + bwaReadGroupID)
-    }
-    else println("Error on reading header")
-
-    //loading index files
-    println("Load Index Files")
-    val bwaIdx = new BWAIdxType
-    val prefix = "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta"
-    bwaIdx.load(prefix, 0)
-
-    //loading BWA MEM options
-    println("Load BWA-MEM options")
-    val bwaMemOpt = new MemOptType
-    bwaMemOpt.load
-
-    //loading reads
-    println("Load FASTQ files")
-
-    // set the single/pair end mode
-    bwaMemOpt.flag |= MEM_F_PE
-    bwaMemOpt.flag |= MEM_F_ALL
-    bwaMemOpt.flag |= MEM_F_NO_MULTI
-
-    // Set readNum to the total number of reads in JNI mode
-    //var readNum = 5000000
-    var readNum = 1000000
-    var batchNum = 99010
-    var n = 0
-    var numProcessed = 0
-    var seqs: Array[FASTQSingleNode] = new Array[FASTQSingleNode](0)
-    var reader1: BufferedReader = null
-    var reader2: BufferedReader = null
-
-    if((bwaMemOpt.flag & MEM_F_PE) > 0) {
-      //reader1 = new BufferedReader(new FileReader("/home/ytchen/genomics/data/HCC1954_1_10Mreads.fq"))
-      //reader2 = new BufferedReader(new FileReader("/home/ytchen/genomics/data/HCC1954_2_10Mreads.fq"))
-      reader1 = new BufferedReader(new FileReader("/home/ytchen/genomics/data/JNI_1_2M.fq"))
-      reader2 = new BufferedReader(new FileReader("/home/ytchen/genomics/data/JNI_2_2M.fq"))
-    }
-    else
-      reader1 = new BufferedReader(new FileReader("/home/ytchen/genomics/data/HCC1954_1_20reads.fq"))      
-
-    val samWriter = new SAMWriter("test.sam")
-    samWriter.init
-    samWriter.writeString(bwaGenSAMHeader(bwaIdx.bns))
-
-    println("Read FASTQ")
-    if((bwaMemOpt.flag & MEM_F_PE) > 0)
-      seqs = loadBatchPairFASTQSeqs(reader1, reader2, readNum)
-    else      
-      seqs = loadBatchFASTQSeqs(reader1, readNum / 2)
-
-    do {
-      if(readNum - numProcessed >= batchNum) n = batchNum
-      else n = readNum - numProcessed
-
-      var seqsInBatch = new Array[FASTQSingleNode](n)
-      
-      var bpNum: Long = 0
-      var i = 0 
-      println("[JNI] Read Starting Index: " + (i + numProcessed)); 
-      while(i < n) {
-        bpNum += seqs(i).seqLen
-        seqsInBatch(i) = seqs(i + numProcessed)
-        i += 1
-      }
- 
-      println("read " + n + " sequences (" + bpNum + " bp)")
-
-      memProcessSeqsJNI(bwaMemOpt, bwaIdx.bwt, bwaIdx.bns, bwaIdx.pac, numProcessed, n, seqsInBatch, null, samWriter)
-      numProcessed += n
-      
-      println("Num processed: " + numProcessed)
-
-    } while(n == batchNum)
-    
-    if((bwaMemOpt.flag & MEM_F_PE) > 0) {
-      reader1.close
-      reader2.close
-    }
-    else
-      reader1.close
-    samWriter.close
-  } 
-
-  def memProcessSeqsJNI(opt: MemOptType, bwt: BWTType, bns: BNTSeqType, pac: Array[Byte], numProcessed: Long, n: Int, seqs: Array[FASTQSingleNode], pes0: Array[MemPeStat], samWriter: SAMWriter) {
-
-    var pes: Array[MemPeStat] = new Array[MemPeStat](4)   
-    var j = 0
-    while(j < 4) {
-      pes(j) = new MemPeStat
-      j += 1
-    }
-
-
-    // worker1
-    // find mapping positions
-    println("@Worker1")
-    var i = 0
-    var regsAllReads: Array[MemAlnRegArrayType] = new Array[MemAlnRegArrayType](seqs.length)
-
-    if((opt.flag & MEM_F_PE) == 0) {
-      while(i < seqs.length) {
-        regsAllReads(i) = bwaMemWorker1(opt, bwt, bns, pac, seqs(i).seqLen, seqs(i).seq)
-        i += 1
-        if((i % 10000) == 0) println(i)
-      }
-    }
-    else {
-      while(i < seqs.length) {
-        regsAllReads(i) = bwaMemWorker1(opt, bwt, bns, pac, seqs(i).seqLen, seqs(i).seq)
-        i += 1
-        regsAllReads(i) = bwaMemWorker1(opt, bwt, bns, pac, seqs(i).seqLen, seqs(i).seq)
-        i += 1
-
-        if((i % 10000) == 0) println(i)
-      }
-    }
-
-    var testReads = new Array[testRead](seqs.length)
-    i = 0
-    while(i < seqs.length) {
-      var read = new testRead
-      read.seq = seqs(i)
-      read.regs = regsAllReads(i)
-      testReads(i) = read
-      i += 1
-    }
-
-   
-    println("@MemPeStat")
-    if((opt.flag & MEM_F_PE) > 0) { // infer insert sizes if not provided
-      if(pes0 != null) // if pes0 != NULL, set the insert-size distribution as pes0
-        pes = pes0
-      else // otherwise, infer the insert size distribution from data
-        memPeStat(opt, bns.l_pac, n, regsAllReads, pes)
-    }    
-
-    println("@Worker2")
-    i = 0
-    if((opt.flag & MEM_F_PE) == 0) {
-      testReads.foreach(read => {
-        bwaMemWorker2(opt, read.regs.regs, bns, pac, read.seq, 0) 
-        i += 1
-        if((i % 10000) == 0) println(i) } )
-    }
-    else {
-      var seqsPairs: Array[Array[FASTQSingleNode]] = new Array[Array[FASTQSingleNode]](testReads.size >> 1)
-      var alnRegVecPairs: Array[Array[Array[MemAlnRegType]]] = new Array[Array[Array[MemAlnRegType]]](testReads.size >> 1)
-      var idx = 0
-
-      while(i < testReads.size) {
-        var alnRegVec: Array[Array[MemAlnRegType]] = new Array[Array[MemAlnRegType]](2)
-        var seqs: Array[FASTQSingleNode] = new Array[FASTQSingleNode](2)
-      
-        if(testReads(i).regs != null) 
-          alnRegVec(0) = testReads(i).regs.regs
-        seqs(0) = testReads(i).seq
-        if(testReads(i + 1).regs != null) 
-          alnRegVec(1) = testReads(i + 1).regs.regs
-        seqs(1) = testReads(i + 1).seq
-
-        seqsPairs(idx) = new Array[FASTQSingleNode](2)
-        seqsPairs(idx)(0) = seqs(0)
-        seqsPairs(idx)(1) = seqs(1)
-        alnRegVecPairs(idx) = new Array[Array[MemAlnRegType]](2)
-        alnRegVecPairs(idx)(0) = alnRegVec(0)
-        alnRegVecPairs(idx)(1) = alnRegVec(1)
-
-        idx += 1
-        i += 2
-      }
-
-      memSamPeGroupJNI(opt, bns, pac, pes, testReads.size >> 1, numProcessed >> 1, seqsPairs, alnRegVecPairs)
-    }
-
-    //testReads.foreach(r => samWriter.writeString((r.seq.sam)))
-  }
-*/
-
-  // load reads from the FASTQ file (for testing use)
-  def loadBatchFASTQSeqs(reader: BufferedReader, batchNum: Int): Array[FASTQSingleNode] = {
-    
-    var line = reader.readLine
-    var i = 0
-    var readIdx = 0    
-    var seqs: Vector[FASTQSingleNode] = scala.collection.immutable.Vector.empty
-
-    while(line != null && i < batchNum) {
-
-      val lineFields = line.split(" ")
-      var seq = new FASTQSingleNode
-  
-      if(lineFields.length == 1) {
-        if(lineFields(0).charAt(0) == '@') seq.name = lineFields(0).substring(1).dropRight(2)
-        else seq.name = lineFields(0).dropRight(2)
-        seq.seq = reader.readLine
-        seq.seqLen = seq.seq.size
-        reader.readLine
-        seq.qual = reader.readLine
-        seq.comment = ""
-        seqs = seqs :+ seq
-        i += 1
-      }
-      else if(lineFields.length == 2) {
-        if(lineFields(0).charAt(0) == '@') seq.name = lineFields(0).substring(1).dropRight(2)
-        else seq.name = lineFields(0).dropRight(2)
-        seq.comment = lineFields(1)
-        seq.seq = reader.readLine
-        seq.seqLen = seq.seq.size
-        reader.readLine
-        seq.qual = reader.readLine
-        seqs = seqs :+ seq
-        i += 1
-      }
-      else 
-        println("Error: Input format not handled")
-
-      if(i < batchNum)
-        line = reader.readLine
-    } 
-    
-    seqs.toArray
-  }
-
-  def loadBatchPairFASTQSeqs(reader1: BufferedReader, reader2: BufferedReader, batchNum: Int): Array[FASTQSingleNode] = {
-
-    var line = reader1.readLine
-    var i = 0
-    var readIdx = 0    
-    var seqs: Vector[FASTQSingleNode] = scala.collection.immutable.Vector.empty
-
-    while(line != null && i < batchNum) {
-
-      val lineFields = line.split(" ")
-      var seq = new FASTQSingleNode
-  
-      if(lineFields.length == 1) {
-        if(lineFields(0).charAt(0) == '@') seq.name = lineFields(0).substring(1).dropRight(2)
-        else seq.name = lineFields(0).dropRight(2)
-        seq.seq = reader1.readLine
-        seq.seqLen = seq.seq.size
-        reader1.readLine
-        seq.qual = reader1.readLine
-        seq.comment = ""
-        seqs = seqs :+ seq
-        i += 1
-      }
-      else if(lineFields.length == 2) {
-        if(lineFields(0).charAt(0) == '@') seq.name = lineFields(0).substring(1).dropRight(2)
-        else seq.name = lineFields(0).dropRight(2)
-        seq.comment = lineFields(1)
-        seq.seq = reader1.readLine
-        seq.seqLen = seq.seq.size
-        reader1.readLine
-        seq.qual = reader1.readLine
-        seqs = seqs :+ seq
-        i += 1
-      }
-      else 
-        println("Error: Input format not handled")
-
-      line = reader2.readLine
-
-      if(line == null) println("Error: the number of two FASTQ files are different")
-      else {
-        val lineFields = line.split(" ")
-        var seq = new FASTQSingleNode
-
-        if(lineFields.length == 1) {
-          if(lineFields(0).charAt(0) == '@') seq.name = lineFields(0).substring(1).dropRight(2)
-          else seq.name = lineFields(0).dropRight(2)
-          seq.seq = reader2.readLine
-          seq.seqLen = seq.seq.size
-          reader2.readLine
-          seq.qual = reader2.readLine
-          seq.comment = ""
-          seqs = seqs :+ seq
-          i += 1
-        }
-        else if(lineFields.length == 2) {
-          if(lineFields(0).charAt(0) == '@') seq.name = lineFields(0).substring(1).dropRight(2)
-          else seq.name = lineFields(0).dropRight(2)
-          seq.comment = lineFields(1)
-          seq.seq = reader2.readLine
-          seq.seqLen = seq.seq.size
-          reader2.readLine
-          seq.qual = reader2.readLine
-          seqs = seqs :+ seq
-          i += 1
-        }
-        else
-          println("Error: Input format not handled")
-      }
-
-      if(i < batchNum)
-        line = reader1.readLine
-    } 
-    
-    seqs.toArray
-
-  }
-
-  class testRead {
-    var seq: FASTQSingleNode = _
-    var regs: MemAlnRegArrayType = _
   }
 
 } 
