@@ -111,6 +111,8 @@ object BWAMEMSpark {
 
     memMain(sc, "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/single-end/HCC1954_1_10M-11M.fq", false, 5, 4,
             true, 10, true, "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so", true, "test_single.sam")
+//    memMain(sc, "ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/single-end/HCC1954_1_10M-11M.fq", false, 5, 4,
+//            true, 10, true, "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so", true, "test_single.sam")
 
     println("Job Finished!!!")
   } 
