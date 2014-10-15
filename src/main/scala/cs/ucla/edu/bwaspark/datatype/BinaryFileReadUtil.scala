@@ -49,15 +49,17 @@ object BinaryFileReadUtil {
 
   //HDFS version of readLongArray
   def readLongArray(fc: FSDataInputStream, arraySize: Int, startIdx: Int): Array[Long] = {
-    val buf = ByteBuffer.allocate(readBufSize)
-    buf.order(ByteOrder.nativeOrder)
+    val bytes = new Array[Byte](readBufSize)
     var ret = 0
     var outputArray = new Array[Long](arraySize)
     var idx = startIdx
 
+    ret = fc.read(bytes)
     while(ret >= 0) {
-      ret = fc.read(buf)
-      buf.flip
+      assert (ret > 0)
+
+      val buf = ByteBuffer.wrap(bytes, 0, ret)
+      buf.order(ByteOrder.nativeOrder)
      
       // Fill the data from buf
       while(buf.hasRemaining) {
@@ -66,8 +68,28 @@ object BinaryFileReadUtil {
         idx += 1
       }
 
-      buf.rewind
+      ret = fc.read(bytes)
     }
+
+    ////val buf = ByteBuffer.allocate(readBufSize)
+    ////buf.order(ByteOrder.nativeOrder)
+    ////var ret = 0
+    ////var outputArray = new Array[Long](arraySize)
+    ////var idx = startIdx
+
+    ////while(ret >= 0) {
+    ////  ret = fc.read(buf)
+    ////  buf.flip
+    //// 
+    ////  // Fill the data from buf
+    ////  while(buf.hasRemaining) {
+    ////    val piece = buf.getLong
+    ////    outputArray(idx) = piece
+    ////    idx += 1
+    ////  }
+
+    ////  buf.rewind
+    ////}
 
     outputArray
   }
@@ -106,15 +128,17 @@ object BinaryFileReadUtil {
 
   //HDFS version of readIntArray
   def readIntArray(fc: FSDataInputStream, arraySize: Int, startIdx: Int): Array[Int] = {
-    val buf = ByteBuffer.allocate(readBufSize)
-    buf.order(ByteOrder.nativeOrder)
+    val bytes = new Array[Byte](readBufSize)
     var ret = 0
     var outputArray = new Array[Int](arraySize)
     var idx = startIdx
 
+    ret = fc.read(bytes)
     while(ret >= 0) {
-      ret = fc.read(buf)
-      buf.flip
+      assert (ret > 0)
+
+      val buf = ByteBuffer.wrap(bytes, 0, ret)
+      buf.order(ByteOrder.nativeOrder)
      
       // Fill the data from buf
       while(buf.hasRemaining) {
@@ -123,8 +147,28 @@ object BinaryFileReadUtil {
         idx += 1
       }
 
-      buf.rewind
+      //buf.rewind
+      ret = fc.read(bytes)
     }
+    ////val buf = ByteBuffer.allocate(readBufSize)
+    ////buf.order(ByteOrder.nativeOrder)
+    ////var ret = 0
+    ////var outputArray = new Array[Int](arraySize)
+    ////var idx = startIdx
+
+    ////while(ret >= 0) {
+    ////  ret = fc.read(buf)
+    ////  buf.flip
+    //// 
+    ////  // Fill the data from buf
+    ////  while(buf.hasRemaining) {
+    ////    val piece = buf.getInt
+    ////    outputArray(idx) = piece
+    ////    idx += 1
+    ////  }
+
+    ////  buf.rewind
+    ////}
 
     outputArray
   }
@@ -168,29 +212,35 @@ object BinaryFileReadUtil {
 
   //HDFS version of readByteArray
   def readByteArray(fc: FSDataInputStream, arraySize: Int, startIdx: Int): Array[Byte] = {
-    val buf = ByteBuffer.allocate(readBufSize)
-    buf.order(ByteOrder.nativeOrder)
     var ret = 0
     var outputArray = new Array[Byte](arraySize)
-    var idx = startIdx
-    var reachSizeLimit = false
 
-    while(ret >= 0 && !reachSizeLimit) {
-      ret = fc.read(buf)
-      buf.flip
-     
-      // Fill the data from buf
-      while(buf.hasRemaining && !reachSizeLimit) {
-        val piece = buf.get
-        outputArray(idx) = piece
-        idx += 1
+    ret = fc.read(outputArray)
+    assert (ret == arraySize)
 
-        if(idx >= arraySize) 
-          reachSizeLimit = true
-      }
+    ////val buf = ByteBuffer.allocate(readBufSize)
+    ////buf.order(ByteOrder.nativeOrder)
+    ////var ret = 0
+    ////var outputArray = new Array[Byte](arraySize)
+    ////var idx = startIdx
+    ////var reachSizeLimit = false
 
-      buf.rewind
-    }
+    ////while(ret >= 0 && !reachSizeLimit) {
+    ////  ret = fc.read(buf)
+    ////  buf.flip
+    //// 
+    ////  // Fill the data from buf
+    ////  while(buf.hasRemaining && !reachSizeLimit) {
+    ////    val piece = buf.get
+    ////    outputArray(idx) = piece
+    ////    idx += 1
+
+    ////    if(idx >= arraySize) 
+    ////      reachSizeLimit = true
+    ////  }
+
+    ////  buf.rewind
+    ////}
 
     outputArray
   }
@@ -211,10 +261,14 @@ object BinaryFileReadUtil {
 
   //HDFS Version of readLong
   def readLong(fc: FSDataInputStream): Long = {
-    val buf = ByteBuffer.allocate(8)
+    var bytes = new Array[Byte](8)
+    fc.read(bytes, 0, 8)
+    val buf = ByteBuffer.wrap(bytes)
     buf.order(ByteOrder.nativeOrder)
-    fc.read(buf)
-    buf.flip
+    //val buf = ByteBuffer.allocate(8)
+    //buf.order(ByteOrder.nativeOrder)
+    //fc.read(buf)
+    //buf.flip
     buf.getLong
   }
 
@@ -234,10 +288,14 @@ object BinaryFileReadUtil {
 
   //HDFS version of readInt
   def readInt(fc: FSDataInputStream): Int = {
-    val buf = ByteBuffer.allocate(4)
+    var bytes = new Array[Byte](4)
+    fc.read(bytes, 0, 4)
+    val buf = ByteBuffer.wrap(bytes)
     buf.order(ByteOrder.nativeOrder)
-    fc.read(buf)
-    buf.flip
+    //val buf = ByteBuffer.allocate(4)
+    //buf.order(ByteOrder.nativeOrder)
+    //fc.read(buf)
+    //buf.flip
     buf.getInt
   }
 
