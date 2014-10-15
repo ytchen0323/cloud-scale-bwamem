@@ -5,6 +5,11 @@ import java.nio.channels.FileChannel
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
 import scala.Serializable
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.Path;
 
 import cs.ucla.edu.bwaspark.datatype.BinaryFileReadUtil._
 
@@ -41,29 +46,55 @@ class BWTType extends Serializable {
     *  @param saFile the input file path
     */
   private def SALoad(saFile: String) {
-    val fs = new FileInputStream(saFile)
-    val fc = fs.getChannel
-    
-    // Read primary in .sa file
-    val primarySa = readLong(fc)
-    assert(primarySa == primary, "SA-BWT inconsistency: primary is not the same.")
+    val conf = new Configuration
+    val fs = FileSystem.get(conf)
+    val path = new Path(saFile)
+    if (fs.exists(path)) {
+      val fc = fs.open(path)
+      // Read primary in .sa file
+      val primarySa = readLong(fc)
+      assert(primarySa == primary, "SA-BWT inconsistency: primary is not the same.")
 
-    // Skipped 4 * sizeof(Long)
-    for(i <- 0 to 3)
-      readLong(fc)
+      // Skipped 4 * sizeof(Long)
+      for(i <- 0 to 3)
+        readLong(fc)
 
-    // Read saIntv member variable in BWTType
-    saIntv = readLong(fc).asInstanceOf[Int]  // Long -> Int (done in the original c code)
+      // Read saIntv member variable in BWTType
+      saIntv = readLong(fc).asInstanceOf[Int]  // Long -> Int (done in the original c code)
 
-    // Read seqLen in .sa file
-    val seqLenSa = readLong(fc)
-    assert(seqLenSa == seqLen, "SA-BWT inconsistency: seq_len is not the same.")
+      // Read seqLen in .sa file
+      val seqLenSa = readLong(fc)
+      assert(seqLenSa == seqLen, "SA-BWT inconsistency: seq_len is not the same.")
 
-    numSa = (seqLen + saIntv) / saIntv;
-    sa = readLongArray(fc, numSa.asInstanceOf[Int], 1)   // numSa: Long -> Int
-    sa(0) = -1    
+      numSa = (seqLen + saIntv) / saIntv;
+      sa = readLongArray(fc, numSa.asInstanceOf[Int], 1)   // numSa: Long -> Int
+      sa(0) = -1    
 
-    fc.close
+      fc.close
+    }
+    else {
+      val fc = new FileInputStream(saFile).getChannel
+      // Read primary in .sa file
+      val primarySa = readLong(fc)
+      assert(primarySa == primary, "SA-BWT inconsistency: primary is not the same.")
+
+      // Skipped 4 * sizeof(Long)
+      for(i <- 0 to 3)
+        readLong(fc)
+
+      // Read saIntv member variable in BWTType
+      saIntv = readLong(fc).asInstanceOf[Int]  // Long -> Int (done in the original c code)
+
+      // Read seqLen in .sa file
+      val seqLenSa = readLong(fc)
+      assert(seqLenSa == seqLen, "SA-BWT inconsistency: seq_len is not the same.")
+
+      numSa = (seqLen + saIntv) / saIntv;
+      sa = readLongArray(fc, numSa.asInstanceOf[Int], 1)   // numSa: Long -> Int
+      sa(0) = -1    
+
+      fc.close
+    }
 
     // Debugging message
     //println("saIntv: " + saIntv)
@@ -78,24 +109,45 @@ class BWTType extends Serializable {
     *  @param bwtFile the input file path
     */
   private def BWTLoad(bwtFile: String) {
-    val fs = new FileInputStream(bwtFile)
-    val fc = fs.getChannel
-    val fileSize = fc.size
+    val conf = new Configuration
+    val fs = FileSystem.get(conf)
+    val path = new Path(bwtFile)
+    if (fs.exists(path)) {
+      var fc = fs.open(path)
+      var fileSize = fs.getFileStatus(path).getLen
+      // Read primary member variable in BWTType
+      primary = readLong(fc)
 
-    // Read primary member variable in BWTType
-    primary = readLong(fc)
+      // Read L[1] - L[4] member variables in BWTType
+      L2(0) = 0
+      for(i <- 1 to 4) 
+        L2(i) = readLong(fc)
+      seqLen = L2(4)
 
-    // Read L[1] - L[4] member variables in BWTType
-    L2(0) = 0
-    for(i <- 1 to 4) 
-      L2(i) = readLong(fc)
-    seqLen = L2(4)
+      // Read the bwt array in BWTType
+      bwtSize = (fileSize - 8 * 5) >> 2
+      bwt = readIntArray(fc, bwtSize.asInstanceOf[Int], 0)
 
-    // Read the bwt array in BWTType
-    bwtSize = (fileSize - 8 * 5) >> 2
-    bwt = readIntArray(fc, bwtSize.asInstanceOf[Int], 0)
+      fc.close
+    }
+    else {
+      var fc = new FileInputStream(bwtFile).getChannel
+      var fileSize = fc.size
+      // Read primary member variable in BWTType
+      primary = readLong(fc)
 
-    fc.close
+      // Read L[1] - L[4] member variables in BWTType
+      L2(0) = 0
+      for(i <- 1 to 4) 
+        L2(i) = readLong(fc)
+      seqLen = L2(4)
+
+      // Read the bwt array in BWTType
+      bwtSize = (fileSize - 8 * 5) >> 2
+      bwt = readIntArray(fc, bwtSize.asInstanceOf[Int], 0)
+
+      fc.close
+    }
 
     // Debugging messages
     //println("File size: " + fileSize)
