@@ -6,6 +6,11 @@ import java.io.{FileInputStream, IOException}
 import java.nio.channels.FileChannel
 import cs.ucla.edu.bwaspark.datatype.BinaryFileReadUtil._
 import scala.Serializable
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.Path;
 
 //BWAIdxType: maintaining all the information of BWA Index generated from FastA Reference
 class BWAIdxType extends Serializable {  
@@ -48,9 +53,20 @@ class BWAIdxType extends Serializable {
       if (true) {
         def pacLoader(filename: String, length: Long): Array[Byte] = {
           //to add: reading binary file
-          val reader = new FileInputStream(filename).getChannel
-          var pac = readByteArray(reader, (length/4+1).toInt, 0)          
-          pac
+          val conf = new Configuration
+          val fs = FileSystem.get(conf)
+          val path = new Path(filename)
+          //var reader: AnyRef = null
+          if (fs.exists(path)) {
+            val reader = fs.open(path)
+            var pac = readByteArray(reader, (length/4+1).toInt, 0)          
+            pac
+          }
+          else {
+            val reader = new FileInputStream(filename).getChannel
+            var pac = readByteArray(reader, (length/4+1).toInt, 0)          
+            pac
+          }
         }
         pac = pacLoader(prefix+".pac", bns.l_pac)
       }
