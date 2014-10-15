@@ -2,6 +2,11 @@ package cs.ucla.edu.bwaspark.datatype
 
 import java.io._
 import scala.Serializable
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.Path;
 
 class BNTSeqType extends Serializable {
   //length of contents in .pac file
@@ -30,7 +35,16 @@ class BNTSeqType extends Serializable {
 
     //define a loader for .ann file
     def annLoader(filename: String): (Array[BNTAnnType], Long, Int, Int) = {
-      val annBufferedReader = new BufferedReader(new FileReader(filename)) //file reader
+      val conf = new Configuration
+      val fs = FileSystem.get(conf)
+      val path = new Path(filename)
+      var annBufferedReader: BufferedReader = null
+      if (fs.exists(path)) {
+        annBufferedReader = new BufferedReader(new InputStreamReader(fs.open(path)))
+      }
+      else {
+        annBufferedReader = new BufferedReader(new FileReader(filename)) //file reader
+      }
       val headLine = annBufferedReader.readLine.split(" ") //the first line of the file, specify three variables: l_pac, n_seqs, and seed
       assert(headLine.length == 3)
       val l_pac = headLine(0).toLong
@@ -61,7 +75,16 @@ class BNTSeqType extends Serializable {
 
     //define a loader for .amb file
     def ambLoader(filename: String): (Array[BNTAmbType], Int) = {
-      val ambBufferedReader = new BufferedReader(new FileReader(filename)) //file reader
+      val conf = new Configuration
+      val fs = FileSystem.get(conf)
+      val path = new Path(filename)
+      var ambBufferedReader: BufferedReader = null
+      if (fs.exists(path)) {
+        ambBufferedReader = new BufferedReader(new InputStreamReader(fs.open(path)))
+      }
+      else {
+        ambBufferedReader = new BufferedReader(new FileReader(filename)) //file reader
+      }
       val headLine = ambBufferedReader.readLine.split(" ").map(str => str.toLong) //the first line of the file, specify three variables: l_pac, n_seqs, and n_holes; l_pac and n_seqs are the same as those in .ann file
       assert(headLine.length == 3)
       val n_holes = headLine(2).toInt
