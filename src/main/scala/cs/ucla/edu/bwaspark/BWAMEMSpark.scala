@@ -50,8 +50,8 @@ object BWAMEMSpark {
     // environment setup
     //val sc = new SparkContext("local[96]", "BWA-mem Spark",
        //"/home/hadoopmaster/spark/spark-0.9.0-incubating-bin-hadoop2-prebuilt/", List("/home/ytchen/incubator/bwa-spark-0.3.1/target/bwa-spark-0.3.1.jar"))
-    val conf = new SparkConf().setAppName("Cloud Scale BWAMEM").set("spark.executor.memory", "36g").set("spark.storage.memoryFraction", "0.45").set("spark.akka.frameSize", "128").set("spark.logConf", "true").set("spark.executor.extraLibraryPath", "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so")
-    //val conf = new SparkConf().setAppName("Cloud Scale BWAMEM").set("spark.executor.memory", "20g").set("spark.storage.memoryFraction", "0.7").set("spark.akka.frameSize", "512").set("spark.logConf", "true").set("spark.executor.extraLibraryPath", "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so")
+    //val conf = new SparkConf().setAppName("Cloud Scale BWAMEM").set("spark.executor.memory", "36g").set("spark.storage.memoryFraction", "0.45").set("spark.akka.frameSize", "128").set("spark.logConf", "true").set("spark.executor.extraLibraryPath", "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so")
+    val conf = new SparkConf().setAppName("Cloud Scale BWAMEM").set("spark.executor.memory", "20g").set("spark.storage.memoryFraction", "0.7").set("spark.akka.frameSize", "512").set("spark.logConf", "true").set("spark.executor.extraLibraryPath", "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so")
     val sc = new SparkContext(conf)
 
     // upload input FASTQ to HDFS
@@ -78,26 +78,29 @@ object BWAMEMSpark {
     fastqLoader6.storeFASTQInHDFS(sc, "/home/ytchen/genomics/data/correctness_verification/HCC1954_1_100M-101M.fq", "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/single-end/HCC1954_1_100M-101M.fq")
 */    
 
+    val fastqLoader = new FASTQLocalFileLoader(250000)
+    fastqLoader.storePairEndFASTQInHDFS(sc, "/home/hadoopmaster/genomics/InputFiles/HCC1954_1.fq", "/home/hadoopmaster/genomics/InputFiles/HCC1954_2.fq", "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954.fq")
 /*
     // pair-end upload
+
     val fastqLoader1 = new FASTQLocalFileLoader(250000)
-    fastqLoader1.storePairEndFASTQInHDFS(sc, "/home/ytchen/genomics/data/correctness_verification/HCC1954_1_1-1M.fq", "/home/ytchen/genomics/data/correctness_verification/HCC1954_2_1-1M.fq", 
-      "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_1-1M.fq")
+    fastqLoader1.storePairEndFASTQInHDFS(sc, "/home/ytchen/genomics/data/correctness_verification/HCC1954_1_1-4M.fq", "/home/ytchen/genomics/data/correctness_verification/HCC1954_2_1-4M.fq", 
+      "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_1-4M.fq")
     val fastqLoader2 = new FASTQLocalFileLoader(250000)
-    fastqLoader2.storePairEndFASTQInHDFS(sc, "/home/ytchen/genomics/data/correctness_verification/HCC1954_1_10M-11M.fq", "/home/ytchen/genomics/data/correctness_verification/HCC1954_2_10M-11M.fq", 
-      "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_10M-11M.fq")
+    fastqLoader2.storePairEndFASTQInHDFS(sc, "/home/ytchen/genomics/data/correctness_verification/HCC1954_1_10M-14M.fq", "/home/ytchen/genomics/data/correctness_verification/HCC1954_2_10M-14M.fq", 
+      "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_10M-14M.fq")
     val fastqLoader3 = new FASTQLocalFileLoader(250000)
-    fastqLoader3.storePairEndFASTQInHDFS(sc, "/home/ytchen/genomics/data/correctness_verification/HCC1954_1_30M-31M.fq", "/home/ytchen/genomics/data/correctness_verification/HCC1954_2_30M-31M.fq", 
-      "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_30M-31M.fq")
+    fastqLoader3.storePairEndFASTQInHDFS(sc, "/home/ytchen/genomics/data/correctness_verification/HCC1954_1_30M-34M.fq", "/home/ytchen/genomics/data/correctness_verification/HCC1954_2_30M-34M.fq", 
+      "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_30M-34M.fq")
     val fastqLoader4 = new FASTQLocalFileLoader(250000)
-    fastqLoader4.storePairEndFASTQInHDFS(sc, "/home/ytchen/genomics/data/correctness_verification/HCC1954_1_50M-51M.fq", "/home/ytchen/genomics/data/correctness_verification/HCC1954_2_50M-51M.fq", 
-      "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_50M-51M.fq")
+    fastqLoader4.storePairEndFASTQInHDFS(sc, "/home/ytchen/genomics/data/correctness_verification/HCC1954_1_50M-54M.fq", "/home/ytchen/genomics/data/correctness_verification/HCC1954_2_50M-54M.fq", 
+      "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_50M-54M.fq")
     val fastqLoader5 = new FASTQLocalFileLoader(250000)
-    fastqLoader5.storePairEndFASTQInHDFS(sc, "/home/ytchen/genomics/data/correctness_verification/HCC1954_1_80M-81M.fq", "/home/ytchen/genomics/data/correctness_verification/HCC1954_2_80M-81M.fq", 
-      "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_80M-81M.fq")
+    fastqLoader5.storePairEndFASTQInHDFS(sc, "/home/ytchen/genomics/data/correctness_verification/HCC1954_1_80M-84M.fq", "/home/ytchen/genomics/data/correctness_verification/HCC1954_2_80M-84M.fq", 
+      "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_80M-84M.fq")
     val fastqLoader6 = new FASTQLocalFileLoader(250000)
-    fastqLoader6.storePairEndFASTQInHDFS(sc, "/home/ytchen/genomics/data/correctness_verification/HCC1954_1_100M-101M.fq", "/home/ytchen/genomics/data/correctness_verification/HCC1954_2_100M-101M.fq", 
-      "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_100M-101M.fq")
+    fastqLoader6.storePairEndFASTQInHDFS(sc, "/home/ytchen/genomics/data/correctness_verification/HCC1954_1_100M-104M.fq", "/home/ytchen/genomics/data/correctness_verification/HCC1954_2_100M-104M.fq", 
+      "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_100M-104M.fq")
 */
 
     // read mapping    
@@ -109,8 +112,31 @@ object BWAMEMSpark {
             //true, 10, true, "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so", true)
 
 
-    memMain(sc, "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/single-end/HCC1954_1_10M-11M.fq", false, 5, 4,
-            true, 10, true, "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so", true, "test_single.sam")
+    //memMain(sc, "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/single-end/HCC1954_1_10M-11M.fq", false, 5, 4,
+            //true, 10, true, "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so", true, "test_single.sam")
+/*
+    memMain(sc, "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_10M-14M.fq", true, 33, 32,
+            true, 10, true, "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so", true, "HCC1954_10M-14M.sam")
+    memMain(sc, "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_30M-34M.fq", true, 33, 32,
+            true, 10, true, "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so", true, "HCC1954_30M-34M.sam")
+    memMain(sc, "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_50M-54M.fq", true, 33, 32,
+            true, 10, true, "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so", true, "HCC1954_50M-54M.sam")
+    memMain(sc, "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_80M-84M.fq", true, 33, 32,
+            true, 10, true, "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so", true, "HCC1954_80M-84M.sam")
+    memMain(sc, "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_100M-104M.fq", true, 33, 32,
+            true, 10, true, "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so", true, "HCC1954_100M-104M.sam")
+
+    memMain(sc, "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_10M-11M.fq", true, 9, 8,
+            true, 10, true, "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so", true, "HCC1954_10M-11M.sam")
+    memMain(sc, "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_30M-31M.fq", true, 9, 8,
+            true, 10, true, "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so", true, "HCC1954_30M-31M.sam")
+    memMain(sc, "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_50M-51M.fq", true, 9, 8,
+            true, 10, true, "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so", true, "HCC1954_50M-51M.sam")
+    memMain(sc, "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_80M-81M.fq", true, 9, 8,
+            true, 10, true, "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so", true, "HCC1954_80M-81M.sam")
+    memMain(sc, "/home/hadoopmaster/genomics/ReferenceMetadata/human_g1k_v37.fasta", "hdfs://Jc11:9000/user/ytchen/data/correctness_verification/HCC1954_100M-101M.fq", true, 9, 8,
+            true, 10, true, "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so", true, "HCC1954_100M-101M.sam")
+*/
 
     println("Job Finished!!!")
   } 
