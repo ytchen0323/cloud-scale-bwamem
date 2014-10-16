@@ -41,6 +41,7 @@ close IN;
 
 $percentage = ($aligned_num / $total_read_num) * 100;
 
+print "Input file: " . $sam . "\n";
 print "Total # of reads: " . $total_read_num . "\n";
 print "Total # of aligned reads: " . $aligned_num . "\n";
 print "Aligned (%): " . $percentage . "%\n";
