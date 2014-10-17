@@ -32,8 +32,9 @@ class FASTQLocalFileLoader(batchedLineNum: Int) {
      *  @param reader the Java BufferedReader object to read a file line by line
      *  @param sc the spark context
      *  @param batchedNum the number of lines to read per batch
+     *  @param filePartitionNum the number of partitions in HDFS of this batch. We suggest to set this number equal to the number of core in the cluster.
      */
-   def batchedRDDReader(reader: BufferedReader, sc: SparkContext, batchedNum: Int): RDD[(Null, SerializableFASTQRecord)] = {
+   def batchedRDDReader(reader: BufferedReader, sc: SparkContext, batchedNum: Int, filePartitionNum: Int): RDD[(Null, SerializableFASTQRecord)] = {
       val charset = Charset.forName("ASCII")
       val encoder = charset.newEncoder()
       var records: Vector[FASTQRecord] = scala.collection.immutable.Vector.empty
@@ -85,7 +86,7 @@ class FASTQLocalFileLoader(batchedLineNum: Int) {
 
 
       val serializedRecords = records.map(new SerializableFASTQRecord(_))
-      val rdd = sc.parallelize(serializedRecords)
+      val rdd = sc.parallelize(serializedRecords, filePartitionNum)
       val pairRDD = rdd.map(rec => (null, rec))
       pairRDD
    }   
@@ -94,13 +95,14 @@ class FASTQLocalFileLoader(batchedLineNum: Int) {
    /**
      *  Read the FASTQ file from the local file system and store it in HDFS
      *  The FASTQ is encoded and compressed in the Parquet+Avro format in HDFS 
+     *  Note that there will be several directories since the local large FASTQ file is read and stored in HDFS with several batches
      *
      *  @param sc the spark context
      *  @param inFile the input FASTQ file in the local file system
      *  @param outFileRootPath the root path of the output FASTQ files in HDFS. 
-     *    Note that there will be several directories since the local large FASTQ file is read and stored in HDFS with several batches
+     *  @param filePartitionNum the number of partitions in HDFS of this batch. We suggest to set this number equal to the number of core in the cluster.
      */
-   def storeFASTQInHDFS(sc: SparkContext, inFile: String, outFileRootPath: String) {
+   def storeFASTQInHDFS(sc: SparkContext, inFile: String, outFileRootPath: String, filePartitionNum: Int) {
       val reader = new BufferedReader(new FileReader(inFile))
 
       val parquetHadoopLogger = Logger.getLogger("parquet.hadoop")
@@ -109,7 +111,7 @@ class FASTQLocalFileLoader(batchedLineNum: Int) {
       var i: Int = 0
 
       while(!isEOF) {
-         val pairRDD = batchedRDDReader(reader, sc, batchedLineNum)
+         val pairRDD = batchedRDDReader(reader, sc, batchedLineNum, filePartitionNum)
          val job = new Job(pairRDD.context.hadoopConfiguration)
 
          // Configure the ParquetOutputFormat to use Avro as the serialization format
@@ -124,6 +126,7 @@ class FASTQLocalFileLoader(batchedLineNum: Int) {
          // Save the RDD to a Parquet file in our temporary output directory
          val outputPath = outFileRootPath + "/"  + i.toString();
          pairRDD.saveAsNewAPIHadoopFile(outputPath, classOf[Void], classOf[FASTQRecord], classOf[AvroParquetOutputFormat], ContextUtil.getConfiguration(job))
+
          i += 1
       }
    }
