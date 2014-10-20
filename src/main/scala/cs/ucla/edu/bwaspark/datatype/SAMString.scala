@@ -32,5 +32,8 @@ class SAMString {
     str(idx) = c
     idx += 1
   }
+
+  override def toString = new String(str, 0, idx)
+
 }
 
