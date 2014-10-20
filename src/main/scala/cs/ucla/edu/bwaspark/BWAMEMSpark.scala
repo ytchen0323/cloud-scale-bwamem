@@ -166,12 +166,40 @@ object BWAMEMSpark {
   }
 
 
+  val usage: String = "Usage 1: upload raw FASTQ file(s) to HDFS\n" +
+                      "Usage: upload-fastq [-bn INT] isPairEnd filePartitionNum inputFASTQFilePath1 [inputFASTQFilePath2] outFileHDFSPath\n\n" +
+                      "Required arguments (in the following order): \n" +
+                      "isPairEnd: pair-end (1) or single-end (0) data\n" +
+                      "inputFASTQFilePath1: the first input path of the FASTQ file in the local file system (for both single-end and pair-end)\n" +
+                      "inputFASTQFilePath2: (optional) the second input path of the FASTQ file in the local file system (for pair-end)\n" +
+                      "outFileHDFSPath: the root path of the output FASTQ files in HDFS\n\n" +
+                      "Optional arguments: \n" +
+                      "-bn (optional): the number of lines to be read in one group (batch)\n\n\n" +
+                      "Usage 2: use CS-BWAMEM aligner\n" +
+                      "Usage: cs-bwamem [-bfn INT] [-bPSW (0/1)] [-sbatch INT] [-bPSWJNI (0/1)] [-jniPath STRING] [-oSAM (0/1)] [-oSAMPath STRING] isPairEnd fastaInputPath fastqHDFSInputPath fastqInputFolderNum\n\n" +
+                      "Required arguments (in the following order): \n" +
+                      "isPairEnd: perform pair-end (1) or single-end (0) mapping\n" +
+                      "fastaInputPath: the path of (local) BWA index files (bns, pac, and so on)\n" +
+                      "fastqHDFSInputPath: the path of the raw read files stored in HDFS\n" +
+                      "fastqInputFolderNum: the number of folders generated in the HDFS for the raw reads\n\n" +
+                      "Optional arguments: \n" +
+                      "-bfn (optional): the number of raw read folders in a batch to be processed\n" +
+                      "-bPSW (optional): whether the pair-end Smith Waterman is performed in a batched way\n" + 
+                      "-sbatch (optional): the number of reads to be processed in a subbatch\n" +
+                      "-bPSWJNI (optional): whether the native JNI library is called for better performance\n" +
+                      "-jniPath (optional): the JNI library path in the local machine\n" +
+                      "-oSAM (optional): whether the SAM format file is used as output\n" +
+                      "-oSAMPath (optional): whether we use the SAM format file as output\n" 
+
   private def commandLineParser(arg: String): String = {
     def getCommand(cmd: String): String = {
       cmd match {
         case "upload-fastq" => cmd
         case "cs-bwamem" => cmd
+        case "help" => println(usage)
+                         exit(1)
         case _ => println("Unknown command " + cmd)
+                  println(usage)
                   exit(1)
       }
     }
