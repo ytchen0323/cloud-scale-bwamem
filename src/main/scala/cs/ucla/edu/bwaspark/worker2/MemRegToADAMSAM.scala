@@ -1,6 +1,7 @@
 package cs.ucla.edu.bwaspark.worker2
 
 import scala.collection.mutable.MutableList
+import scala.collection.immutable.Vector
 import scala.math.log
 import scala.math.abs
 
@@ -9,6 +10,12 @@ import cs.ucla.edu.bwaspark.sam.SAMHeader
 import cs.ucla.edu.bwaspark.util.BNTSeqUtil._
 import cs.ucla.edu.bwaspark.util.SWUtil._
 import cs.ucla.edu.avro.fastq._
+
+import org.bdgenomics.formats.avro.AlignmentRecord
+import org.bdgenomics.formats.avro.Contig
+import org.bdgenomics.adam.models.{SequenceRecord, SequenceDictionary, RecordGroup}
+
+import htsjdk.samtools.SAMRecord
 
 // for test use
 import java.io.FileReader
@@ -305,7 +312,7 @@ object MemRegToADAMSAM {
 
     // set flag
     if(alnMateTmp != null) alnTmp.flag |= 0x1 // is paired in sequencing
-    if(alnTmp.rid < 0) alnTmp.flag |= 0x4 // is mapped
+    if(alnTmp.rid < 0) alnTmp.flag |= 0x4 // is unmapped
     if(alnMateTmp != null && alnMateTmp.rid < 0) alnTmp.flag |= 0x8 // is mate mapped
     if(alnTmp.rid < 0 && alnMateTmp != null && alnMateTmp.rid >= 0) { // copy mate to alignment
       alnTmp.rid = alnMateTmp.rid
@@ -439,7 +446,7 @@ object MemRegToADAMSAM {
       // When using decode(seq.quality), it is a destructive operation
       // Therefore, we need to create a copy of ByteBuffer for seq.quality
       val bb = ByteBuffer.wrap(seq.quality.array)
-      val qual = Charset.forName("ISO-8859-1").decode(seq.quality).array;
+      val qual = Charset.forName("ISO-8859-1").decode(bb).array;
       if(qual.size > 0) {
         var i = qe - 1
         while(i >= qb) {
@@ -883,6 +890,392 @@ object MemRegToADAMSAM {
       line = reader.readLine
       i += 1
     }
+  }
+
+
+  /**
+    *  Transform the alignment registers to SAM format
+    *  
+    *  @param opt the input MemOptType object
+    *  @param bns the input BNTSeqType object
+    *  @param pac the PAC array
+    *  @param seq the read
+    *  @param seqTrans the read in the Byte format
+    *  @param regs the alignment registers to be transformed
+    *  @param extraFlag
+    *  @param alnIn currently we skip this parameter
+    *  @param samHeader the SAM header required to output SAM strings
+    *  @param seqDict the sequences (chromosome) dictionary: used for ADAM format output
+    *  @param readGroup the read group: used for ADAM format output
+    *  @return an array of ADAM format object
+    */
+  def memRegToADAMSe(opt: MemOptType, bns: BNTSeqType, pac: Array[Byte], seq: FASTQRecord, seqTrans: Array[Byte], regs: Array[MemAlnRegType], extraFlag: Int, 
+                     alnMate: MemAlnType, samHeader: SAMHeader, seqDict: SequenceDictionary, readGroup: RecordGroup): Array[AlignmentRecord] = {
+    var alns: MutableList[MemAlnType] = new MutableList[MemAlnType]
+    var adamVec: Vector[AlignmentRecord] = scala.collection.immutable.Vector.empty 
+
+    if(regs != null) {
+      var i = 0
+      while(i < regs.length) {
+        if(regs(i).score >= opt.T) {
+          if(regs(i).secondary < 0 || ((opt.flag & MEM_F_ALL) > 0)) {
+            if(regs(i).secondary < 0 || regs(i).score >= regs(regs(i).secondary).score * 0.5) {
+              var aln = memRegToAln(opt, bns, pac, seq.seqLength, seqTrans, regs(i))   // NOTE: current data structure has not been obtained from RDD. We assume the length to be 101 here
+              alns += aln
+              aln.flag |= extraFlag   // flag secondary
+              if(regs(i).secondary >= 0) aln.sub = -1   // don't output sub-optimal score
+              if(i > 0 && regs(i).secondary < 0)   // if supplementary
+                if((opt.flag & MEM_F_NO_MULTI) > 0) aln.flag |= 0x10000
+                else aln.flag |= 0x800
+
+              if(i > 0 && aln.mapq > alns.head.mapq) aln.mapq = alns.head.mapq            
+            }
+          }
+        }
+
+        i += 1
+      }
+    }
+
+    // no alignments good enough; then write an unaligned record
+    if(alns.length == 0) { 
+      var aln = memRegToAln(opt, bns, pac, seq.seqLength, seqTrans, null)
+      aln.flag |= extraFlag
+      var alnList = new Array[MemAlnType](1)
+      alnList(0) = aln
+
+      adamVec = adamVec :+ memAlnToADAM(bns, seq, seqTrans, alnList, 0, alnMate, samHeader, seqDict, readGroup)
+    }
+    else {
+      var k = 0
+      val alnsArray = alns.toArray
+      while(k < alns.size) {
+        adamVec = adamVec :+ memAlnToADAM(bns, seq, seqTrans, alnsArray, k, alnMate, samHeader, seqDict, readGroup)
+        k += 1
+      }
+    }
+
+    adamVec.toArray
+  }
+
+
+  /**
+    *  Transform the alignment registers to alignment type (ADAM format)
+    *
+    *  @param bns the input BNTSeqType object
+    *  @param seq the input read, store as in the FASTQRecord data structure
+    *  @param seqTrans the input read after transformation to the byte array
+    *  @param alnList the input alignment list
+    *  @param which the id to be processed in the alnList
+    *  @param alnMate the mate alignment
+    *  @param samHeader the SAM header required to output ADAM
+    *  @param seqDict the sequences (chromosome) dictionary: used for ADAM format output
+    *  @param readGroup the read group: used for ADAM format output
+    *  @return the output ADAM object
+    */
+  def memAlnToADAM(bns: BNTSeqType, seq: FASTQRecord, seqTrans: Array[Byte], alnList: Array[MemAlnType], which: Int, alnMate: MemAlnType, 
+                   samHeader: SAMHeader, seqDict: SequenceDictionary, readGroup: RecordGroup): AlignmentRecord = {
+    val builder: AlignmentRecord.Builder = AlignmentRecord.newBuilder
+    var aln = alnList(which)
+    var alnTmp = aln.copy
+    var alnMateTmp: MemAlnType = null
+    if(alnMate != null) alnMateTmp = alnMate.copy 
+
+    // set flag
+    if(alnMateTmp != null) alnTmp.flag |= 0x1 // is paired in sequencing
+    if(alnTmp.rid < 0) alnTmp.flag |= 0x4 // is unmapped
+    if(alnMateTmp != null && alnMateTmp.rid < 0) alnTmp.flag |= 0x8 // is mate mapped
+    if(alnTmp.rid < 0 && alnMateTmp != null && alnMateTmp.rid >= 0) { // copy mate to alignment
+      alnTmp.rid = alnMateTmp.rid
+      alnTmp.pos = alnMateTmp.pos
+      alnTmp.isRev = alnMateTmp.isRev
+      alnTmp.nCigar = 0
+    }
+    if(alnMateTmp != null && alnMateTmp.rid < 0 && alnTmp.rid >= 0) { // copy alignment to mate
+      alnMateTmp.rid = alnTmp.rid
+      alnMateTmp.pos = alnTmp.pos
+      alnMateTmp.isRev = alnTmp.isRev
+      alnMateTmp.nCigar = 0
+    }
+    if(alnTmp.isRev > 0) alnTmp.flag |= 0x10 // is on the reverse strand
+    if(alnMateTmp != null && alnMateTmp.isRev > 0) alnTmp.flag |= 0x20 // is mate on the reverse strand
+       
+    // print up to CIGAR
+    // seq.name is a Java ByteBuffer
+    // When using decode(seq.name), it is a destructive operation
+    // Therefore, we need to create a copy of ByteBuffer for seq.name
+    val bb = ByteBuffer.wrap(seq.name.array)
+    val name = Charset.forName("ISO-8859-1").decode(bb).toString
+    builder.setReadName(name)   // QNAME
+    if((alnTmp.flag & 0x10000) > 0) alnTmp.flag = (alnTmp.flag & 0xffff) | 0x100   // FLAG
+    else alnTmp.flag = (alnTmp.flag & 0xffff) | 0
+    
+    // write the flag informantion to ADAM object
+    // Need to double check "primary, secondary, and supplementary flags"
+    if((alnTmp.flag & 0x1) > 0) builder.setReadPaired(true)                   // Bit: 0x1
+    if((alnTmp.flag & 0x2) > 0) builder.setProperPair(true)                   // Bit: 0x2
+    if((alnTmp.flag & 0x4) == 0) builder.setReadMapped(true)                  // Bit: 0x4
+    if((alnTmp.flag & 0x8) == 0 && (alnMateTmp != null))
+      builder.setMateMapped(true)                                             // Bit: 0x8
+    if((alnTmp.flag & 0x10) > 0) builder.setReadNegativeStrand(true)          // Bit: 0x10
+    if((alnTmp.flag & 0x20) > 0) builder.setMateNegativeStrand(true)          // Bit: 0x20
+    if((alnTmp.flag & 0x40) > 0) builder.setFirstOfPair(true)                 // Bit: 0x40
+    if((alnTmp.flag & 0x80) > 0) builder.setSecondOfPair(true)                // Bit: 0x80
+    if((alnTmp.flag & 0x100) == 0) builder.setPrimaryAlignment(true)          // Bit: 0x100
+    else {
+      if((alnTmp.flag & 0x800) > 0) { 
+        builder.setSupplementaryAlignment(true)                               // Bit: 0x800 
+        builder.setSecondaryAlignment(false)                                  // Bit: 0x100
+      }
+      else if((alnTmp.flag & 0x800) == 0) {
+        builder.setSupplementaryAlignment(false)
+        builder.setSecondaryAlignment(true)        
+      }
+    }
+    if((alnTmp.flag & 0x200) > 0) builder.setFailedVendorQualityChecks(true)  // Bit: 0x200
+    if((alnTmp.flag & 0x400) > 0) builder.setDuplicateRead(true)              // Bit: 0x400
+    
+    var cigarStrTmp: String = null
+    if(alnTmp.rid >= 0) { // with coordinate
+      builder.setContig(SequenceRecord.toADAMContig(seqDict(bns.anns(alnTmp.rid).name.toString).get))   // RNAME
+      builder.setStart(alnTmp.pos)   // POS
+      builder.setMapq(alnTmp.mapq)   // MAPQ
+
+      if(alnTmp.nCigar > 0) {   // aligned
+        var cigarStr = new SAMString
+        var len = 0 // calculate end in ADAM format
+        var i = 0
+        while(i < alnTmp.nCigar) {
+          var c = alnTmp.cigar.cigarSegs(i).op
+          if(c == 3 || c == 4) 
+            if(which > 0) c = 4   // use hard clipping for supplementary alignments
+            else c = 3
+          if(c == 0 || c == 2)
+            len += alnTmp.cigar.cigarSegs(i).len
+          cigarStr.addCharArray(alnTmp.cigar.cigarSegs(i).len.toString.toCharArray)
+          cigarStr.addChar(int2op(c))
+          i += 1
+        }
+
+        builder.setEnd(alnTmp.pos + len)  // the end field in the ADAM object
+        builder.setCigar(cigarStr.toString)   // CIGAR
+        cigarStrTmp = new String(cigarStr.toString)
+      }
+    }
+
+    // print the basesTrimmedFromStart and basesTrimmedFromEnd fields in the ADAM object
+    var cigar: String = new String("")
+    if(cigarStrTmp != null) cigar = cigarStrTmp
+    val startTrim = if (cigar == "") {
+      0
+    } else {
+      val count = cigar.takeWhile(_.isDigit).toInt
+      val operator = cigar.dropWhile(_.isDigit).head
+
+      if (operator == 'H') {
+        count
+      } else {
+        0
+      }
+    }
+    val endTrim = if (cigar.endsWith("H")) {
+      // must reverse string as takeWhile is not implemented in reverse direction
+      cigar.dropRight(1).reverse.takeWhile(_.isDigit).reverse.toInt
+    } else {
+      0
+    }
+    builder.setBasesTrimmedFromStart(startTrim)
+    builder.setBasesTrimmedFromEnd(endTrim)
+
+    // print the mate position if applicable
+    if(alnMateTmp != null && alnMateTmp.rid >= 0) {
+      if(alnTmp.rid == alnMateTmp.rid) builder.setMateContig(SequenceRecord.toADAMContig(seqDict(bns.anns(alnTmp.rid).name.toString).get))   // RNEXT
+      else builder.setMateContig(SequenceRecord.toADAMContig(seqDict(bns.anns(alnMateTmp.rid).name.toString).get)) 
+      builder.setMateAlignmentStart(alnMateTmp.pos)   // PNEXT
+
+      if(alnMateTmp.nCigar > 0) {   // aligned
+        var len = 0 // calculate end in ADAM format
+        var i = 0
+        while(i < alnMateTmp.nCigar) {
+          var c = alnMateTmp.cigar.cigarSegs(i).op
+          if(c == 0 || c == 2)
+            len += alnTmp.cigar.cigarSegs(i).len
+          i += 1
+        }
+
+        builder.setMateAlignmentEnd(alnTmp.pos + len)  // the end field in the ADAM object
+      }
+
+      // TLEN; calculate the insert distance
+      /*
+      if(alnTmp.rid == alnMateTmp.rid) {
+        var p0: Long = -1
+        var p1: Long = -1
+        if(alnTmp.isRev > 0) p0 = alnTmp.pos + getRlen(alnTmp.cigar) - 1
+        else p0 = alnTmp.pos
+        if(alnMateTmp.isRev > 0) p1 = alnMateTmp.pos + getRlen(alnMateTmp.cigar) - 1
+        else p1 = alnMateTmp.pos
+        if(alnMateTmp.nCigar == 0 || alnTmp.nCigar == 0) samStr.addChar('0')
+        else {
+          if(p0 > p1) samStr.addCharArray((-(p0 - p1 + 1)).toString.toCharArray)
+          else if(p0 < p1) samStr.addCharArray((-(p0 - p1 - 1)).toString.toCharArray)
+          else samStr.addCharArray((-(p0 - p1)).toString.toCharArray)
+        }
+      }
+      else samStr.addChar('0')
+      */
+    }
+    
+    // print SEQ and QUAL
+    if((alnTmp.flag & 0x100) > 0) {   // for secondary alignments, don't write SEQ and QUAL
+      builder.setSequence("*")   // SEQ
+      builder.setQual("*")       // QUAL
+    }
+    else if(alnTmp.isRev == 0) {   // the forward strand
+      var qb = 0
+      var qe = seq.seqLength
+
+      if(alnTmp.nCigar > 0) {
+        if(which > 0 && (alnTmp.cigar.cigarSegs(0).op == 4 || alnTmp.cigar.cigarSegs(0).op == 3)) qb += alnTmp.cigar.cigarSegs(0).len
+        if(which > 0 && (alnTmp.cigar.cigarSegs(alnTmp.nCigar - 1).op == 4 || alnTmp.cigar.cigarSegs(alnTmp.nCigar - 1).op == 3)) qe -= alnTmp.cigar.cigarSegs(alnTmp.nCigar - 1).len
+      }
+
+      var seqStr = new SAMString
+      var i = qb
+      while(i < qe) {
+        seqStr.addChar(int2forward(seqTrans(i)))
+        i += 1
+      }
+      builder.setSequence(seqStr.toString)   // SEQ
+      // seq.quality is a Java ByteBuffer
+      // When using decode(seq.quality), it is a destructive operation
+      // Therefore, we need to create a copy of ByteBuffer for seq.quality
+      val bb = ByteBuffer.wrap(seq.quality.array)
+      val qual = Charset.forName("ISO-8859-1").decode(bb).toString;
+      builder.setQual(qual)  // QUAL
+    }
+    else {   // the reverse strand
+      var qb = 0
+      var qe = seq.seqLength
+      
+      if(alnTmp.nCigar > 0) {
+        if(which > 0 && (alnTmp.cigar.cigarSegs(0).op == 4 || alnTmp.cigar.cigarSegs(0).op == 3)) qe -= alnTmp.cigar.cigarSegs(0).len
+        if(which > 0 && (alnTmp.cigar.cigarSegs(alnTmp.nCigar - 1).op == 4 || alnTmp.cigar.cigarSegs(alnTmp.nCigar - 1).op == 3)) qb += alnTmp.cigar.cigarSegs(alnTmp.nCigar - 1).len
+      }
+
+      var seqStr = new SAMString
+      var i = qe - 1
+      while(i >= qb) {
+        seqStr.addChar(int2reverse(seqTrans(i)))
+        i -= 1
+      }
+      builder.setSequence(seqStr.toString)   // SEQ
+      // seq.quality is a Java ByteBuffer
+      // When using decode(seq.quality), it is a destructive operation
+      // Therefore, we need to create a copy of ByteBuffer for seq.quality
+      val bb = ByteBuffer.wrap(seq.quality.array)
+      val qual = Charset.forName("ISO-8859-1").decode(bb).toString.reverse;
+      builder.setQual(qual)  // QUAL
+    }
+
+    // print mismatchingPositions in the ADAM object
+    if(alnTmp.nCigar > 0) 
+      builder.setMismatchingPositions(alnTmp.cigar.cigarStr)
+
+    // print optional tags
+    var attrStr = new SAMString
+    if(alnTmp.nCigar > 0) {
+      attrStr.addCharArray("NM:i:".toCharArray)
+      attrStr.addCharArray(alnTmp.NM.toString.toCharArray)
+    }
+    if(alnTmp.score >= 0) {
+      attrStr.addCharArray("\tAS:i:".toCharArray)
+      attrStr.addCharArray(alnTmp.score.toString.toCharArray)
+    }
+    if(alnTmp.sub >= 0) {
+      attrStr.addCharArray("\tXS:i:".toCharArray)
+      attrStr.addCharArray(alnTmp.sub.toString.toCharArray)
+    }
+    // Read group is read using SAMHeader class 
+    if(samHeader.bwaReadGroupID != "") {
+      attrStr.addCharArray("\tRG:Z:".toCharArray)
+      attrStr.addCharArray(samHeader.bwaReadGroupID.toCharArray)
+    }
+    
+    if((alnTmp.flag & 0x100) == 0) { // not multi-hit
+      var i = 0
+      var isBreak = false
+      while(i < alnList.size && !isBreak) {
+        if(i != which && (alnList(i).flag & 0x100) == 0) { 
+          isBreak = true 
+          i -= 1
+        }
+        i += 1
+      }
+
+      if(i < alnList.size) { // there are other primary hits; output them
+        attrStr.addCharArray("\tSA:Z:".toCharArray)
+        var j = 0
+        while(j < alnList.size) {
+          if(j != which && (alnList(j).flag & 0x100) == 0) { // proceed if: 1) different from the current; 2) not shadowed multi hit
+            attrStr.addCharArray(bns.anns(alnList(j).rid).name.toCharArray)
+            attrStr.addChar(',')
+            attrStr.addCharArray((alnList(j).pos + 1).toString.toCharArray)
+            attrStr.addChar(',')
+            if(alnList(j).isRev == 0) attrStr.addChar('+')
+            else attrStr.addChar('-')
+            attrStr.addChar(',')
+            
+            var k = 0
+            while(k < alnList(j).nCigar) {
+              attrStr.addCharArray(alnList(j).cigar.cigarSegs(k).len.toString.toCharArray)
+              attrStr.addChar(int2op(alnList(j).cigar.cigarSegs(k).op))
+              k += 1
+            }
+
+            attrStr.addChar(',')
+            attrStr.addCharArray(alnList(j).mapq.toString.toCharArray)
+            attrStr.addChar(',')
+            attrStr.addCharArray(alnList(j).NM.toString.toCharArray)
+            attrStr.addChar(';')
+
+          }
+          j += 1
+        }
+      } 
+    }
+
+    // seq.comment is a Java ByteBuffer
+    // When using decode(seq.comment), it is a destructive operation
+    // Therefore, we need to create a copy of ByteBuffer for seq.comment
+    val bbComment = ByteBuffer.wrap(seq.comment.array)
+    val comment = Charset.forName("ISO-8859-1").decode(bbComment).array;
+    if(comment.size > 0) {
+      attrStr.addChar('\t')
+      attrStr.addCharArray(comment)
+    }
+    
+    builder.setAttributes(attrStr.toString)
+
+    // Set read group
+    // Note that the alignments are generated from aligner but not from an input SAM file. 
+    // Therefore, we should have only one read group.
+    builder.setRecordGroupName(readGroup.recordGroupName)
+           .setRecordGroupSequencingCenter(readGroup.sequencingCenter.getOrElse(null))
+           .setRecordGroupDescription(readGroup.description.getOrElse(null))
+           .setRecordGroupFlowOrder(readGroup.flowOrder.getOrElse(null))
+           .setRecordGroupKeySequence(readGroup.keySequence.getOrElse(null))
+           .setRecordGroupLibrary(readGroup.library.getOrElse(null))
+           .setRecordGroupPlatform(readGroup.platform.getOrElse(null))
+           .setRecordGroupPlatformUnit(readGroup.platformUnit.getOrElse(null))
+           .setRecordGroupSample(readGroup.sample)
+
+    if(readGroup.runDateEpoch.getOrElse(null) != null)
+      builder.setRecordGroupRunDateEpoch(readGroup.runDateEpoch.get)
+    if(readGroup.predictedMedianInsertSize.getOrElse(null) != null)
+      builder.setRecordGroupPredictedMedianInsertSize(readGroup.predictedMedianInsertSize.get)
+
+    builder.build
   }
 }
 

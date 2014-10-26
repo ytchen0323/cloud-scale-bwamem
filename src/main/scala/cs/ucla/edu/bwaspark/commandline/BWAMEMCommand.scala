@@ -10,7 +10,10 @@ class BWAMEMCommand {
     var subBatchSize: Int = 10                         // (optional) the number of reads to be processed in a subbatch
     var isPSWJNI: Boolean = true                       // (optional) whether the native JNI library is called for better performance
     var jniLibPath: String = "./target/jniNative.so"   // (optional) the JNI library path in the local machine
-    var isSAMStringOutput: Boolean = true              // (optional) whether we use the SAM format file as output
-    var samOutputPath: String = "output.sam"           // (optional) the output path of the SAM file
+    var outputChoice: Int = 1                          // (optional) the output format choice
+                                                       //            0: no output (pure computation)
+                                                       //            1: SAM file output in the local file system (default)
+                                                       //            2: ADAM format output in the distributed file system
+    var outputPath: String = "output.sam"              // (optional) the output path; users need to provide correct path in the local or distributed file system
 }
 

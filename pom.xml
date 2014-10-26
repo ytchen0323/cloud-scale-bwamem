@@ -26,7 +26,27 @@
             <id>scala-tools.org</id>
             <name>Scala-tools Maven2 Repository</name>
             <url>http://scala-tools.org/repo-releases</url>
-	</repository>
+        </repository>
+        <repository>
+            <id>sonatype-nexus-snapshots</id>
+            <name>Sonatype Nexus Snapshots</name>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+        <repository>
+            <id>central</id>
+            <name>Maven Repository Switchboard</name>
+            <layout>default</layout>
+            <url>http://repo1.maven.org/maven2</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
     </repositories>
     <pluginRepositories>
         <pluginRepository>
@@ -170,6 +190,16 @@
                 </execution>
               </executions>
             </plugin>
+            <plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-release-plugin</artifactId>
+              <version>2.5</version>
+              <configuration>
+                  <mavenExecutorId>forked-path</mavenExecutorId>
+                  <useReleaseProfile>false</useReleaseProfile>
+                  <arguments>-Psonatype-oss-release</arguments>
+              </configuration>
+            </plugin>
         </plugins>
     </build>
 
@@ -210,8 +240,8 @@
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-core_${scala.artifact.suffix}</artifactId>
             <version>${spark.version}</version>
-	    <scope>system</scope>
-	    <systemPath>/home/pengwei/spark-1.0.1_modified/assembly/target/scala-2.10/spark-assembly-1.0.1-hadoop2.4.1.jar</systemPath>
+            <scope>system</scope>
+            <systemPath>/home/pengwei/spark-1.0.1_modified/assembly/target/scala-2.10/spark-assembly-1.0.1-hadoop2.4.1.jar</systemPath>
             <exclusions>
               <exclusion>
                 <groupId>org.apache.hadoop</groupId>
@@ -221,7 +251,7 @@
                 <groupId>org.apache.hadoop</groupId>
                 <artifactId>hadoop-mapreduce</artifactId>
               </exclusion>
-	    </exclusions> 
+            </exclusions> 
         </dependency>
         <dependency>
             <groupId>org.apache.avro</groupId>
@@ -232,6 +262,21 @@
             <groupId>com.twitter</groupId>
             <artifactId>parquet-avro</artifactId>
             <version>${parquet.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.bdgenomics.bdg-formats</groupId>
+            <artifactId>bdg-formats</artifactId>
+            <version>0.2.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.bdgenomics.adam</groupId>
+            <artifactId>adam-core</artifactId>
+            <version>0.14.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.seqdoop</groupId>
+            <artifactId>htsjdk</artifactId>
+            <version>1.118</version>
         </dependency>
     </dependencies>
 

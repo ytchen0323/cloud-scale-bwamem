@@ -7,8 +7,30 @@ import cs.ucla.edu.bwaspark.worker2.MemSamPe.{memSamPe, memSamPeGroup, memSamPeG
 import cs.ucla.edu.bwaspark.sam.SAMHeader
 import cs.ucla.edu.avro.fastq._
 
+import org.bdgenomics.formats.avro.AlignmentRecord
+import org.bdgenomics.adam.models.{SequenceDictionary, RecordGroup}
+
 object BWAMemWorker2 {
   private val MEM_F_PE: Int = 0x2
+
+  
+  //pre-process: transform A/C/G/T to 0,1,2,3
+  private def locusEncode(locus: Char): Byte = {
+    //transforming from A/C/G/T to 0,1,2,3
+    locus match {
+      case 'A' => 0
+      case 'a' => 0
+      case 'C' => 1
+      case 'c' => 1
+      case 'G' => 2
+      case 'g' => 2
+      case 'T' => 3
+      case 't' => 3
+      case '-' => 5
+      case _ => 4
+    }
+  }
+
 
   /**
     *  BWA-MEM Worker 2: used for single-end alignment
@@ -22,36 +44,43 @@ object BWAMemWorker2 {
     *  @param samHeader the SAM header required to output SAM strings
     *  @return the SAM format string of the given read
     */
-  def bwaMemWorker2(opt: MemOptType, regs: Array[MemAlnRegType], bns: BNTSeqType, pac: Array[Byte], seq: FASTQRecord, numProcessed: Long, samHeader: SAMHeader): String = {
+  def singleEndBwaMemWorker2(opt: MemOptType, regs: Array[MemAlnRegType], bns: BNTSeqType, pac: Array[Byte], seq: FASTQRecord, numProcessed: Long, samHeader: SAMHeader): String = {
     var regsOut: Array[MemAlnRegType] = null
     if(regs != null)
       regsOut = memMarkPrimarySe(opt, regs, numProcessed)
-
     
-    //pre-process: transform A/C/G/T to 0,1,2,3
-
-    def locusEncode(locus: Char): Byte = {
-      //transforming from A/C/G/T to 0,1,2,3
-      locus match {
-        case 'A' => 0
-        case 'a' => 0
-        case 'C' => 1
-        case 'c' => 1
-        case 'G' => 2
-        case 'g' => 2
-        case 'T' => 3
-        case 't' => 3
-        case '-' => 5
-        case _ => 4
-      }
-    }
-
     val seqStr = new String(seq.getSeq.array)
     val seqTrans: Array[Byte] = seqStr.toCharArray.map(ele => locusEncode(ele))
 
     memRegToSAMSe(opt, bns, pac, seq, seqTrans, regsOut, 0, null, samHeader)
   }
 
+
+  /**
+    *  BWA-MEM Worker 2: used for single-end alignment ADAM format output
+    *
+    *  @param opt the input MemOptType object
+    *  @param regs the alignment registers to be transformed
+    *  @param bns the input BNTSeqType object
+    *  @param pac the PAC array
+    *  @param seq the read (NOTE: in the distributed version, we use FASTQRecord data structure.)
+    *  @param numProcessed the number of reads that have been proceeded
+    *  @param samHeader the SAM header required to output SAM strings
+    *  @param seqDict the sequences (chromosome) dictionary: used for ADAM format output
+    *  @param readGroup the read group: used for ADAM format output
+    *  @return the ADAM format object array of the given read
+    */
+  def singleEndBwaMemWorker2ADAMOut(opt: MemOptType, regs: Array[MemAlnRegType], bns: BNTSeqType, pac: Array[Byte], seq: FASTQRecord, 
+                                    numProcessed: Long, samHeader: SAMHeader, seqDict: SequenceDictionary, readGroup: RecordGroup): Array[AlignmentRecord] = {
+    var regsOut: Array[MemAlnRegType] = null
+    if(regs != null)
+      regsOut = memMarkPrimarySe(opt, regs, numProcessed)
+    
+    val seqStr = new String(seq.getSeq.array)
+    val seqTrans: Array[Byte] = seqStr.toCharArray.map(ele => locusEncode(ele))
+
+    memRegToADAMSe(opt, bns, pac, seq, seqTrans, regsOut, 0, null, samHeader, seqDict, readGroup)
+  }
 
   /**
     *  BWA-MEM Worker 2: used for pair-end alignment (No batched processing, No JNI with native libraries.)

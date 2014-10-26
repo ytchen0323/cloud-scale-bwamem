@@ -36,17 +36,17 @@ object BWAMEMSpark {
                                nextOption(map ++ Map('isPSWJNI -> value.toInt), tail)
         case "-jniPath" :: value :: tail =>
                                nextOption(map ++ Map('jniLibPath -> value), tail)
-        case "-oSAM" :: value :: tail =>
-                               nextOption(map ++ Map('isSAMStringOutput -> value.toInt), tail)
-        case "-oSAMPath" :: value :: tail =>
-                               nextOption(map ++ Map('samOutputPath -> value), tail)
+        case "-oChoice" :: value :: tail =>
+                               nextOption(map ++ Map('outputChoice -> value.toInt), tail)
+        case "-oPath" :: value :: tail =>
+                               nextOption(map ++ Map('outputPath -> value), tail)
         case isPairEnd ::  inFASTAPath :: inFASTQPath :: fastqInputFolderNum :: Nil =>  
                                nextOption(map ++ 
                                           Map('isPairEnd -> isPairEnd.toInt) ++ 
                                           Map('inFASTAPath -> inFASTAPath) ++
                                           Map('inFASTQPath -> inFASTQPath) ++
                                           Map('fastqInputFolderNum -> fastqInputFolderNum.toInt), list.tail.tail.tail.tail)
-        case option :: tail => println("Unknown option " + option) 
+        case option :: tail => println("[Error] Unknown option " + option) 
                                exit(1) 
       }
     }
@@ -63,7 +63,7 @@ object BWAMEMSpark {
       else if(isPSWBatched == 0)
         bwamemArgs.isPSWBatched = false
       else {
-        println("Undefined -bPSW argument" + isPSWBatched)
+        println("[Error] Undefined -bPSW argument" + isPSWBatched)
         exit(1)
       }
     }
@@ -76,25 +76,22 @@ object BWAMEMSpark {
       else if(isPSWJNI == 0)
         bwamemArgs.isPSWJNI = false
       else {
-        println("Undefined -bPSWJNI argument" + isPSWJNI)
+        println("[Error] Undefined -bPSWJNI argument" + isPSWJNI)
         exit(1)
       }
     }
     if(options.get('jniLibPath) != None)
       bwamemArgs.jniLibPath = options('jniLibPath).toString
-    if(options.get('isSAMStringOutput) != None) {
-      val isSAMStringOutput = options('isSAMStringOutput).toString.toInt
-      if(isSAMStringOutput == 1)
-        bwamemArgs.isSAMStringOutput = true
-      else if(isSAMStringOutput == 0)
-        bwamemArgs.isSAMStringOutput = false
-      else {
-        println("Undefined -oSAM argument" + isSAMStringOutput)
+    if(options.get('outputChoice) != None) {
+      val outputChoice = options('outputChoice).toString.toInt
+      if(outputChoice > 2) {
+        println("[Error] Undefined -oChoice argument" + outputChoice)
         exit(1)
       }
+      bwamemArgs.outputChoice = outputChoice
     }
-    if(options.get('samOutputPath) != None)
-      bwamemArgs.samOutputPath = options('samOutputPath).toString
+    if(options.get('outputPath) != None)
+      bwamemArgs.outputPath = options('outputPath).toString
 
     val isPairEnd = options('isPairEnd).toString.toInt
     if(isPairEnd == 1)
@@ -102,15 +99,15 @@ object BWAMEMSpark {
     else if(isPairEnd == 0) 
       bwamemArgs.isPairEnd = false
     else {
-      println("Undefined isPairEnd argument" + isPairEnd)
+      println("[Error] Undefined isPairEnd argument" + isPairEnd)
       exit(1)
     }
     bwamemArgs.fastaInputPath = options('inFASTAPath).toString
     bwamemArgs.fastqHDFSInputPath = options('inFASTQPath).toString
     bwamemArgs.fastqInputFolderNum = options('fastqInputFolderNum).toString.toInt  
 
-    println("BWAMEM command line arguments: " + bwamemArgs.isPairEnd + " " + bwamemArgs.fastaInputPath + " " + bwamemArgs.fastqHDFSInputPath + " " + bwamemArgs.fastqInputFolderNum + " " + bwamemArgs.batchedFolderNum + " " + 
-            bwamemArgs.isPSWBatched + " " + bwamemArgs.subBatchSize + " " + bwamemArgs.isPSWJNI + " " + bwamemArgs.jniLibPath + " " + bwamemArgs.isSAMStringOutput + " " + bwamemArgs.samOutputPath)
+    println("CS- BWAMEM command line arguments: " + bwamemArgs.isPairEnd + " " + bwamemArgs.fastaInputPath + " " + bwamemArgs.fastqHDFSInputPath + " " + bwamemArgs.fastqInputFolderNum + " " + 
+            bwamemArgs.batchedFolderNum + " " + bwamemArgs.isPSWBatched + " " + bwamemArgs.subBatchSize + " " + bwamemArgs.isPSWJNI + " " + bwamemArgs.jniLibPath + " " + bwamemArgs.outputChoice + " " + bwamemArgs.outputPath)
 
     bwamemArgs
   }
@@ -149,7 +146,7 @@ object BWAMEMSpark {
     val uploadArgs = new UploadFASTQCommand
     uploadArgs.isPairEnd = options('isPairEnd).toString.toInt
     if(uploadArgs.isPairEnd != 0 && uploadArgs.isPairEnd != 1) {
-      println("Undefined isPairEnd argument" + uploadArgs.isPairEnd)
+      println("[Error] Undefined isPairEnd argument" + uploadArgs.isPairEnd)
       exit(1)
     }
     uploadArgs.filePartitionNum = options('filePartNum).toString.toInt  
@@ -176,7 +173,7 @@ object BWAMEMSpark {
                       "Optional arguments: \n" +
                       "-bn (optional): the number of lines to be read in one group (batch)\n\n\n" +
                       "Usage 2: use CS-BWAMEM aligner\n" +
-                      "Usage: cs-bwamem [-bfn INT] [-bPSW (0/1)] [-sbatch INT] [-bPSWJNI (0/1)] [-jniPath STRING] [-oSAM (0/1)] [-oSAMPath STRING] isPairEnd fastaInputPath fastqHDFSInputPath fastqInputFolderNum\n\n" +
+                      "Usage: cs-bwamem [-bfn INT] [-bPSW (0/1)] [-sbatch INT] [-bPSWJNI (0/1)] [-jniPath STRING] [-oType (0/1/2)] [-oPath STRING] isPairEnd fastaInputPath fastqHDFSInputPath fastqInputFolderNum\n\n" +
                       "Required arguments (in the following order): \n" +
                       "isPairEnd: perform pair-end (1) or single-end (0) mapping\n" +
                       "fastaInputPath: the path of (local) BWA index files (bns, pac, and so on)\n" +
@@ -188,8 +185,11 @@ object BWAMEMSpark {
                       "-sbatch (optional): the number of reads to be processed in a subbatch\n" +
                       "-bPSWJNI (optional): whether the native JNI library is called for better performance\n" +
                       "-jniPath (optional): the JNI library path in the local machine\n" +
-                      "-oSAM (optional): whether the SAM format file is used as output\n" +
-                      "-oSAMPath (optional): whether we use the SAM format file as output\n" 
+                      "-oChoice (optional): the output format choice\n" +
+                      "                   0: no output (pure computation)\n" +
+                      "                   1: SAM file output in the local file system (default)\n" +
+                      "                   2: ADAM format output in the distributed file system\n" +
+                      "-oPath (optional): the output path; users need to provide correct path in the local or distributed file system\n" 
 
   private def commandLineParser(arg: String): String = {
     def getCommand(cmd: String): String = {
@@ -243,7 +243,7 @@ object BWAMEMSpark {
       val sc = new SparkContext(conf)
       
       memMain(sc, bwamemArgs.fastaInputPath, bwamemArgs.fastqHDFSInputPath, bwamemArgs.isPairEnd, bwamemArgs.fastqInputFolderNum, bwamemArgs.batchedFolderNum, bwamemArgs.isPSWBatched, bwamemArgs.subBatchSize, 
-              bwamemArgs.isPSWJNI, bwamemArgs.jniLibPath, bwamemArgs.isSAMStringOutput, bwamemArgs.samOutputPath)
+              bwamemArgs.isPSWJNI, bwamemArgs.jniLibPath, bwamemArgs.outputChoice, bwamemArgs.outputPath)
 
       println("CS-BWAMEM Finished!!!")
 
