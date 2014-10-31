@@ -5,10 +5,12 @@ import java.nio.charset.Charset
 import java.nio.file.{Files,Path,Paths}
 
 
-class SAMWriter(outFile: String) {
+class SAMWriter() {
   var writer: BufferedWriter = _
+  var outFile: String = new String
 
-  def init() {
+  def init(path: String) {
+    outFile = path
     writer = Files.newBufferedWriter(Paths.get(outFile), Charset.forName("utf-8"))
   }
 

@@ -15,9 +15,10 @@ import cs.ucla.edu.bwaspark.fastq._
 import cs.ucla.edu.avro.fastq._
 import cs.ucla.edu.bwaspark.FastMap.memMain
 import cs.ucla.edu.bwaspark.commandline._
+import cs.ucla.edu.bwaspark.dnaseq._
 
-import java.io.FileReader
-import java.io.BufferedReader
+import org.bdgenomics.adam.rdd.ADAMContext._
+
 
 object BWAMEMSpark {
   private def bwamemCmdLineParser(argsList: List[String]): BWAMEMCommand = {
@@ -162,6 +163,16 @@ object BWAMEMSpark {
     uploadArgs
   }
 
+ 
+  private def sortADAMCmdLineParser(argsList: List[String]): List[String] = {
+    val parseList: List[String] = argsList match {
+      case inputPath :: outputPath :: Nil => List(inputPath, outputPath)
+      case _ => println("Unknown command lines arguments")
+                exit(1)
+    }
+
+    parseList
+  }
 
   val usage: String = "Usage 1: upload raw FASTQ file(s) to HDFS\n" +
                       "Usage: upload-fastq [-bn INT] isPairEnd filePartitionNum inputFASTQFilePath1 [inputFASTQFilePath2] outFileHDFSPath\n\n" +
@@ -189,13 +200,20 @@ object BWAMEMSpark {
                       "                   0: no output (pure computation)\n" +
                       "                   1: SAM file output in the local file system (default)\n" +
                       "                   2: ADAM format output in the distributed file system\n" +
-                      "-oPath (optional): the output path; users need to provide correct path in the local or distributed file system\n" 
+                      "-oPath (optional): the output path; users need to provide correct path in the local or distributed file system\n\n\n" +
+                      "Usage 3: merge the output ADAM folder pieces and save as a new ADAM file in HDFS\n" +
+                      "Usage: merge adamHDFSRootInputPath adamHDFSOutputPath\n\n\n" +
+                      "Usage 4: sort the output ADAM folder pieces and save as a new ADAM file in HDFS\n" +
+                      "Usage: sort adamHDFSRootInputPath adamHDFSOutputPath\n"
+
 
   private def commandLineParser(arg: String): String = {
     def getCommand(cmd: String): String = {
       cmd match {
         case "upload-fastq" => cmd
         case "cs-bwamem" => cmd
+        case "merge" => cmd
+        case "sort" => cmd
         case "help" => println(usage)
                          exit(1)
         case _ => println("Unknown command " + cmd)
@@ -215,9 +233,12 @@ object BWAMEMSpark {
     val command = commandLineParser(argsList(0))
     var uploadFASTQArgs = new UploadFASTQCommand
     var bwamemArgs = new BWAMEMCommand
+    var sortArgs = List[String]()
+    val coalesceFactor = 10
 
     if(command == "upload-fastq") uploadFASTQArgs = uploadFASTQCmdLineParser(argsList.tail)
     else if(command == "cs-bwamem") bwamemArgs = bwamemCmdLineParser(argsList.tail)
+    else if(command == "sort") sortArgs = sortADAMCmdLineParser(argsList.tail)
     else { 
       println("Unknown command " + command)
       exit(1)
@@ -250,6 +271,20 @@ object BWAMEMSpark {
       // NOTE: Some of the Spark tasks are in "GET RESULT" status and cause the pending state... 
       //       However, the data are returned. Therefore, we enforce program to exit.
       exit(1)
+    }
+    else if(command == "merge") {
+      val conf = new SparkConf().setAppName("Cloud Scale BWAMEM").set("spark.scheduler.maxRegisteredResourcesWaitingTime", "600000").set("spark.executor.heartbeatInterval", "100000").set("spark.storage.memoryFraction", "0.7").set("spark.worker.timeout", "300000").set("spark.akka.timeout", "300000").set("spark.storage.blockManagerHeartBeatMs", "300000").set("spark.akka.retry.wait", "300000").set("spark.akka.frameSize", "10000").set("spark.logConf", "true").set("spark.executor.extraLibraryPath", "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so").set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").set("spark.shuffle.consolidateFiles", "true")
+      val sc = new SparkContext(conf)
+
+      val adamRecords = MergeADAMFiles(sc, sortArgs(0), coalesceFactor)
+      adamRecords.adamSave(sortArgs(1))
+    }
+    else if(command == "sort") {
+      val conf = new SparkConf().setAppName("Cloud Scale BWAMEM").set("spark.scheduler.maxRegisteredResourcesWaitingTime", "600000").set("spark.executor.heartbeatInterval", "100000").set("spark.storage.memoryFraction", "0.7").set("spark.worker.timeout", "300000").set("spark.akka.timeout", "300000").set("spark.storage.blockManagerHeartBeatMs", "300000").set("spark.akka.retry.wait", "300000").set("spark.akka.frameSize", "10000").set("spark.logConf", "true").set("spark.executor.extraLibraryPath", "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so").set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").set("spark.shuffle.consolidateFiles", "true")
+      val sc = new SparkContext(conf)
+
+      val adamRecords = Sort(sc, sortArgs(0), coalesceFactor)
+      adamRecords.adamSave(sortArgs(1))
     }
 
   } 
