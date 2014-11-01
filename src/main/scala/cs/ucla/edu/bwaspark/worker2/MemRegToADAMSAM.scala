@@ -910,7 +910,7 @@ object MemRegToADAMSAM {
     *  @return an array of ADAM format object
     */
   def memRegToADAMSe(opt: MemOptType, bns: BNTSeqType, pac: Array[Byte], seq: FASTQRecord, seqTrans: Array[Byte], regs: Array[MemAlnRegType], extraFlag: Int, 
-                     alnMate: MemAlnType, samHeader: SAMHeader, seqDict: SequenceDictionary, readGroup: RecordGroup): Array[AlignmentRecord] = {
+                     alnMate: MemAlnType, samHeader: SAMHeader, seqDict: SequenceDictionary, readGroup: RecordGroup): Vector[AlignmentRecord] = {
     var alns: MutableList[MemAlnType] = new MutableList[MemAlnType]
     var adamVec: Vector[AlignmentRecord] = scala.collection.immutable.Vector.empty 
 
@@ -955,7 +955,7 @@ object MemRegToADAMSAM {
       }
     }
 
-    adamVec.toArray
+    adamVec
   }
 
 

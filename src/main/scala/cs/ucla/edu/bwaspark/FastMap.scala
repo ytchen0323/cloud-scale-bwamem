@@ -98,8 +98,13 @@ object FastMap {
     // pair-end read mapping
     if(isPairEnd) {
       bwaMemOpt.flag |= MEM_F_PE
-      memPairEndMapping(sc, fastaLocalInputPath, fastqHDFSInputPath, fastqInputFolderNum, batchFolderNum, bwaMemOpt, bwaIdx, 
-                        isPSWBatched, subBatchSize, isPSWJNI, jniLibPath, outputChoice, samWriter, outputPath, samHeader)
+      if(outputChoice == SAM_OUT_FILE)
+        memPairEndMapping(sc, fastaLocalInputPath, fastqHDFSInputPath, fastqInputFolderNum, batchFolderNum, bwaMemOpt, bwaIdx, 
+                          isPSWBatched, subBatchSize, isPSWJNI, jniLibPath, outputChoice, samWriter, outputPath, samHeader)
+      else if(outputChoice == ADAM_OUT)
+        memPairEndMapping(sc, fastaLocalInputPath, fastqHDFSInputPath, fastqInputFolderNum, batchFolderNum, bwaMemOpt, bwaIdx, 
+                          isPSWBatched, subBatchSize, isPSWJNI, jniLibPath, outputChoice, samWriter, outputPath, samHeader, seqDict, readGroup)
+        
     }
     // single-end read mapping
     else {
@@ -244,10 +249,12 @@ object FastMap {
     *  @param samWriter the writer to write SAM file at the local file system
     *  @param outputPath the output path in the local or distributed file system
     *  @param samHeader the SAM header file used for writing SAM output file
+    *  @param seqDict (optional) the sequences (chromosome) dictionary: used for ADAM format output
+    *  @param readGroup (optional) the read group: used for ADAM format output
     */
   private def memPairEndMapping(sc: SparkContext, fastaLocalInputPath: String, fastqHDFSInputPath: String, fastqInputFolderNum: Int, batchFolderNum: Int, 
                                 bwaMemOpt: MemOptType, bwaIdx: BWAIdxType, isPSWBatched: Boolean, subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String, 
-                                outputChoice: Int, samWriter: SAMWriter, outputPath: String, samHeader: SAMHeader) 
+                                outputChoice: Int, samWriter: SAMWriter, outputPath: String, samHeader: SAMHeader, seqDict: SequenceDictionary = null, readGroup: RecordGroup = null) 
   {
 
     // broadcast shared variables
