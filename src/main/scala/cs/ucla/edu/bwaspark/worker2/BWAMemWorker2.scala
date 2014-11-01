@@ -1,9 +1,11 @@
 package cs.ucla.edu.bwaspark.worker2
 
+import scala.collection.immutable.Vector
+
 import cs.ucla.edu.bwaspark.datatype._
 import cs.ucla.edu.bwaspark.worker2.MemMarkPrimarySe._
 import cs.ucla.edu.bwaspark.worker2.MemRegToADAMSAM._
-import cs.ucla.edu.bwaspark.worker2.MemSamPe.{memSamPe, memSamPeGroup, memSamPeGroupJNI}
+import cs.ucla.edu.bwaspark.worker2.MemSamPe._
 import cs.ucla.edu.bwaspark.sam.SAMHeader
 import cs.ucla.edu.avro.fastq._
 
@@ -79,7 +81,7 @@ object BWAMemWorker2 {
     val seqStr = new String(seq.getSeq.array)
     val seqTrans: Array[Byte] = seqStr.toCharArray.map(ele => locusEncode(ele))
 
-    memRegToADAMSe(opt, bns, pac, seq, seqTrans, regsOut, 0, null, samHeader, seqDict, readGroup)
+    memRegToADAMSe(opt, bns, pac, seq, seqTrans, regsOut, 0, null, samHeader, seqDict, readGroup).toArray
   }
 
   /**
@@ -186,6 +188,49 @@ object BWAMemWorker2 {
       memSamPeGroup(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs, true, samStringArray, samHeader)
 
     samStringArray
+  }
+
+
+  /**
+    *  BWA-MEM Worker 2: used for pair-end alignment (batched processing + JNI with native libraries)
+    *  In addition, the ADAM format output will be write back to the distributed file system
+    *
+    *  @param opt the input MemOptType object
+    *  @param bns the input BNSSeqType object
+    *  @param pac the PAC array
+    *  @param numProcessed the number of reads that have been proceeded
+    *  @param pes the pair-end statistics array
+    *  @param pairEndReadArray the PairEndReadType object array. Each element has both the read and the alignments information
+    *  @param subBatchSize the batch size of the number of reads to be sent to JNI library for native execution
+    *  @param isPSWJNI the Boolean flag to mark whether the JNI native library is going to be used
+    *  @param jniLibPath the JNI library path
+    *  @param samHeader the SAM header required to output SAM strings
+    *  @param seqDict the sequences (chromosome) dictionary: used for ADAM format output
+    *  @param readGroup the read group: used for ADAM format output
+    *  @return the ADAM format object array of the given read
+    */
+  def pairEndBwaMemWorker2PSWBatchedADAMRet(opt: MemOptType, bns: BNTSeqType, pac: Array[Byte], numProcessed: Long, pes: Array[MemPeStat], pairEndReadArray: Array[PairEndReadType], 
+                                            subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String, samHeader: SAMHeader, seqDict: SequenceDictionary, readGroup: RecordGroup): Array[AlignmentRecord] = {
+    var alnRegVecPairs: Array[Array[Array[MemAlnRegType]]] = new Array[Array[Array[MemAlnRegType]]](subBatchSize)
+    var seqsPairs: Array[PairEndFASTQRecord] = new Array[PairEndFASTQRecord](subBatchSize)
+
+    var i = 0
+    while(i < subBatchSize) {
+      alnRegVecPairs(i) = new Array[Array[MemAlnRegType]](2)
+      seqsPairs(i) = new PairEndFASTQRecord
+      seqsPairs(i).seq0 = pairEndReadArray(i).seq0
+      seqsPairs(i).seq1 = pairEndReadArray(i).seq1
+      alnRegVecPairs(i)(0) = pairEndReadArray(i).regs0
+      alnRegVecPairs(i)(1) = pairEndReadArray(i).regs1
+      i += 1
+    }
+
+    if(isPSWJNI) {
+      System.load(jniLibPath)
+      memADAMPeGroupJNI(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs, samHeader, seqDict, readGroup)
+    }
+    else
+      memADAMPeGroup(opt, bns, pac, pes, subBatchSize, numProcessed, seqsPairs, alnRegVecPairs, samHeader, seqDict, readGroup)
   }
 }
 
