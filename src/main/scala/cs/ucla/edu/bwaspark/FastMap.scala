@@ -357,6 +357,38 @@ object FastMap {
           } )
   
         }
+        // Output SAM format file
+        else if(outputChoice == ADAM_OUT) {
+          def it2ArrayIt(iter: Iterator[PairEndReadType]): Iterator[Array[AlignmentRecord]] = {
+            var counter = 0
+            var ret: Vector[Array[AlignmentRecord]] = scala.collection.immutable.Vector.empty
+            var subBatch = new Array[PairEndReadType](subBatchSize)
+            while (iter.hasNext) {
+              subBatch(counter) = iter.next
+              counter = counter + 1
+              if (counter == subBatchSize) {
+                ret = ret :+ pairEndBwaMemWorker2PSWBatchedADAMRet(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, subBatchSize, isPSWJNI, jniLibPath, samHeader, seqDict, readGroup) 
+                counter = 0
+              }
+            }
+            if (counter != 0)
+              ret = ret :+ pairEndBwaMemWorker2PSWBatchedADAMRet(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, counter, isPSWJNI, jniLibPath, samHeader, seqDict, readGroup)
+            ret.toArray.iterator
+          }
+ 
+          val adamObjs = reads.mapPartitions(it2ArrayIt).collect
+          println("Count: " + samStrings.size)
+          reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
+ 
+          // Write to the output file in a sequencial way (for now)
+          samStrings.foreach(s => {
+            s.foreach(pairSeq => {
+              samWriter.writeString(pairSeq(0))
+              samWriter.writeString(pairSeq(1))
+            } )
+          } )
+  
+        }
       }
       // NOTE: need to be modified!!!
       // Normal read-based processing
