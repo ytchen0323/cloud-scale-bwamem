@@ -261,9 +261,17 @@ object FastMap {
     val bwaIdxGlobal = sc.broadcast(bwaIdx, fastaLocalInputPath)  // read from local disks!!!
     val bwaMemOptGlobal = sc.broadcast(bwaMemOpt)
 
+    // Used to avoid time consuming adamRDD.count (numProcessed += adamRDD.count)
+    // Assume the number of read in one batch is the same (This is determined when uploading FASTQ to HDFS)
+    val fastqRDDLoaderTmp = new FASTQRDDLoader(sc, fastqHDFSInputPath, fastqInputFolderNum)
+    val rddTmp = fastqRDDLoaderTmp.PairEndRDDLoadOneBatch(0, batchFolderNum)
+    val batchedReadNum = rddTmp.count
+    rddTmp.unpersist(true)
+
     var numProcessed: Long = 0
     // Process the reads in a batched fashion
     var i: Int = 0
+    var folderID: Int = 0
     while(i < fastqInputFolderNum) {
       
       var pes: Array[MemPeStat] = new Array[MemPeStat](4)
@@ -364,7 +372,7 @@ object FastMap {
           } )
   
         }
-        // Output SAM format file
+        // Output ADAM format file
         else if(outputChoice == ADAM_OUT) {
           def it2ArrayIt(iter: Iterator[PairEndReadType]): Iterator[Array[AlignmentRecord]] = {
             var counter = 0
@@ -383,18 +391,13 @@ object FastMap {
             ret.toArray.iterator
           }
  
-          val adamObjs = reads.mapPartitions(it2ArrayIt).collect
-          println("Count: " + samStrings.size)
-          reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
- 
-          // Write to the output file in a sequencial way (for now)
-          samStrings.foreach(s => {
-            s.foreach(pairSeq => {
-              samWriter.writeString(pairSeq(0))
-              samWriter.writeString(pairSeq(1))
-            } )
-          } )
-  
+          //val adamObjRDD = sc.union(reads.mapPartitions(it2ArrayIt))
+          val adamObjRDD = reads.mapPartitions(it2ArrayIt).flatMap(r => r)
+          adamObjRDD.adamSave(outputPath + "/"  + folderID.toString())
+          numProcessed += batchedReadNum
+          folderID += 1
+          reads.unpersist(true)
+          adamObjRDD.unpersist(true)  // free RDD; seems to be needed (free storage information is wrong)         
         }
       }
       // NOTE: need to be modified!!!

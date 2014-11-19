@@ -894,7 +894,7 @@ object MemRegToADAMSAM {
 
 
   /**
-    *  Transform the alignment registers to SAM format
+    *  Transform the alignment registers to ADAM format
     *  
     *  @param opt the input MemOptType object
     *  @param bns the input BNTSeqType object
@@ -1014,24 +1014,28 @@ object MemRegToADAMSAM {
     // Need to double check "primary, secondary, and supplementary flags"
     if((alnTmp.flag & 0x1) > 0) builder.setReadPaired(true)                   // Bit: 0x1
     if((alnTmp.flag & 0x2) > 0) builder.setProperPair(true)                   // Bit: 0x2
-    if((alnTmp.flag & 0x4) == 0) builder.setReadMapped(true)                  // Bit: 0x4
+    // follow the ADAM format requirement
+    if((alnTmp.flag & 0x4) == 0) {
+      builder.setReadMapped(true)                                             // Bit: 0x4
+      if((alnTmp.flag & 0x10) > 0) builder.setReadNegativeStrand(true)        // Bit: 0x10
+      if((alnTmp.flag & 0x100) == 0) builder.setPrimaryAlignment(true)        // Bit: 0x100
+      else {
+        if((alnTmp.flag & 0x800) > 0) { 
+          builder.setSupplementaryAlignment(true)                             // Bit: 0x800 
+          builder.setSecondaryAlignment(false)                                // Bit: 0x100
+        }
+        else if((alnTmp.flag & 0x800) == 0) {
+          builder.setSupplementaryAlignment(false)                            // Bit: 0x800
+          builder.setSecondaryAlignment(true)                                 // Bit: 0x100
+        }
+      }
+    }
+    else builder.setReadMapped(false)                                         // Bit: 0x4
     if((alnTmp.flag & 0x8) == 0 && (alnMateTmp != null))
       builder.setMateMapped(true)                                             // Bit: 0x8
-    if((alnTmp.flag & 0x10) > 0) builder.setReadNegativeStrand(true)          // Bit: 0x10
     if((alnTmp.flag & 0x20) > 0) builder.setMateNegativeStrand(true)          // Bit: 0x20
     if((alnTmp.flag & 0x40) > 0) builder.setFirstOfPair(true)                 // Bit: 0x40
     if((alnTmp.flag & 0x80) > 0) builder.setSecondOfPair(true)                // Bit: 0x80
-    if((alnTmp.flag & 0x100) == 0) builder.setPrimaryAlignment(true)          // Bit: 0x100
-    else {
-      if((alnTmp.flag & 0x800) > 0) { 
-        builder.setSupplementaryAlignment(true)                               // Bit: 0x800 
-        builder.setSecondaryAlignment(false)                                  // Bit: 0x100
-      }
-      else if((alnTmp.flag & 0x800) == 0) {
-        builder.setSupplementaryAlignment(false)
-        builder.setSecondaryAlignment(true)        
-      }
-    }
     if((alnTmp.flag & 0x200) > 0) builder.setFailedVendorQualityChecks(true)  // Bit: 0x200
     if((alnTmp.flag & 0x400) > 0) builder.setDuplicateRead(true)              // Bit: 0x400
     
@@ -1099,11 +1103,11 @@ object MemRegToADAMSAM {
         while(i < alnMateTmp.nCigar) {
           var c = alnMateTmp.cigar.cigarSegs(i).op
           if(c == 0 || c == 2)
-            len += alnTmp.cigar.cigarSegs(i).len
+            len += alnMateTmp.cigar.cigarSegs(i).len
           i += 1
         }
 
-        builder.setMateAlignmentEnd(alnTmp.pos + len)  // the end field in the ADAM object
+        builder.setMateAlignmentEnd(alnMateTmp.pos + len)  // the end field in the ADAM object
       }
 
       // TLEN; calculate the insert distance
@@ -1127,11 +1131,13 @@ object MemRegToADAMSAM {
     }
     
     // print SEQ and QUAL
-    if((alnTmp.flag & 0x100) > 0) {   // for secondary alignments, don't write SEQ and QUAL
-      builder.setSequence("*")   // SEQ
-      builder.setQual("*")       // QUAL
-    }
-    else if(alnTmp.isRev == 0) {   // the forward strand
+    // do not do this in generating ADAM output
+    //if((alnTmp.flag & 0x100) > 0) {   // for secondary alignments, don't write SEQ and QUAL
+    //  builder.setSequence("*")   // SEQ
+    //  builder.setQual("*")       // QUAL
+    //}
+    //else if(alnTmp.isRev == 0) {   // the forward strand
+    if(alnTmp.isRev == 0) {   // the forward strand
       var qb = 0
       var qe = seq.seqLength
 
@@ -1151,8 +1157,19 @@ object MemRegToADAMSAM {
       // When using decode(seq.quality), it is a destructive operation
       // Therefore, we need to create a copy of ByteBuffer for seq.quality
       val bb = ByteBuffer.wrap(seq.quality.array)
-      val qual = Charset.forName("ISO-8859-1").decode(bb).toString;
-      builder.setQual(qual)  // QUAL
+      val qual = Charset.forName("ISO-8859-1").decode(bb).array;
+      var qualStr = new SAMString
+
+      if(qual.size > 0) {
+        var i = qb
+        while(i < qe) {
+          qualStr.addChar(qual(i))
+          i += 1
+        }
+      }
+      else qualStr.addChar('*')
+
+      builder.setQual(qualStr.toString)  // QUAL
     }
     else {   // the reverse strand
       var qb = 0
@@ -1174,8 +1191,19 @@ object MemRegToADAMSAM {
       // When using decode(seq.quality), it is a destructive operation
       // Therefore, we need to create a copy of ByteBuffer for seq.quality
       val bb = ByteBuffer.wrap(seq.quality.array)
-      val qual = Charset.forName("ISO-8859-1").decode(bb).toString.reverse;
-      builder.setQual(qual)  // QUAL
+      val qual = Charset.forName("ISO-8859-1").decode(bb).array;
+      var qualStr = new SAMString
+
+      if(qual.size > 0) {
+        var i = qe - 1
+        while(i >= qb) {
+          qualStr.addChar(qual(i))
+          i -= 1
+        }
+      }
+      else qualStr.addChar('*')
+
+      builder.setQual(qualStr.toString)  // QUAL
     }
 
     // print mismatchingPositions in the ADAM object

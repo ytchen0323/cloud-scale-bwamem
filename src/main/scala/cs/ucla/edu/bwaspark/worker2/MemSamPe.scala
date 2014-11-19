@@ -2610,7 +2610,7 @@ object MemSamPe {
     val alnRegVecPairsJNI = mateSWArrayToAlnRegPairArray(groupSize, retMateSWArray)
 
     // run the rest of alingment -> SAM function (Smith-Waterman algorithm to generate CIGAR string)
-    memADAMPeGroupRest(opt, bns,  pac, pes, groupSize, id, seqsPairs, seqsTransPairs, alnRegVecPairs, samHeader, seqDict, readGroup)
+    memADAMPeGroupRest(opt, bns,  pac, pes, groupSize, id, seqsPairs, seqsTransPairs, alnRegVecPairsJNI, samHeader, seqDict, readGroup)
   }
 
 }
