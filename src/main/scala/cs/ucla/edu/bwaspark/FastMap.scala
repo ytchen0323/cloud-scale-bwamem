@@ -300,10 +300,23 @@ object FastMap {
       val reads = pairEndFASTQRDD.map( pairSeq => pairEndBwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, pairSeq) ) 
       reads.cache
 
+      // MemPeStat (Reduce step, New implementation)
+      val pesKV = reads.map( pairSeq => memPeStatPrep(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns.l_pac, pairSeq) )
+                          .map(s => (s.dir , s.dist))
+                          .groupByKey
+                          .mapValues(memPeStatComputeNew(bwaMemOptGlobal.value, _))
+                          .collect
+      j = 0
+      while(j < 4) {
+        pes(j) = pesKV(j)._2
+        j += 1
+      }
+      memPeStatComputeDriverNew(bwaMemOptGlobal.value, pes)
+
       // MemPeStat (Reduce step)
-      val peStatPrepRDD = reads.map( pairSeq => memPeStatPrep(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns.l_pac, pairSeq) )
-      val peStatPrepArray = peStatPrepRDD.collect
-      memPeStatCompute(bwaMemOptGlobal.value, peStatPrepArray, pes)
+      //val peStatPrepRDD = reads.map( pairSeq => memPeStatPrep(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns.l_pac, pairSeq) )
+      //val peStatPrepArray = peStatPrepRDD.collect
+      //memPeStatCompute(bwaMemOptGlobal.value, peStatPrepArray, pes)
 
       println("@MemPeStat")
       j = 0
@@ -407,7 +420,9 @@ object FastMap {
         numProcessed += count.toLong
       }
 
-    } 
+ 
+    }
+
   }
 
 } 

@@ -11,6 +11,7 @@ class MemPeStat extends Serializable {
   var failed: Int = 0
   var avg: Double = 0
   var std: Double = 0
+  var elementNum: Int = 0   // used for MapReduce
 
   private def writeObject(out: ObjectOutputStream) {
     out.writeInt(low)
@@ -18,6 +19,7 @@ class MemPeStat extends Serializable {
     out.writeInt(failed)
     out.writeDouble(avg)
     out.writeDouble(std)
+    out.writeInt(elementNum)
   }
 
   private def readObject(in: ObjectInputStream) {
@@ -26,6 +28,7 @@ class MemPeStat extends Serializable {
     failed = in.readInt
     avg = in.readDouble
     std = in.readDouble
+    elementNum = in.readInt
   }
 
   private def readObjectNoData() {
