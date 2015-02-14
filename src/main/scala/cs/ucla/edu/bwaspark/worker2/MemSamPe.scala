@@ -1031,7 +1031,6 @@ object MemSamPe {
     d = 0
     var max = 0
     while(d < 4) {
-      pes(d).elementNum = iSize(d).size
       if(max < iSize(d).size) max = iSize(d).size
       d += 1
     }
@@ -1054,129 +1053,6 @@ object MemSamPe {
     }
   }
    
-
-  /**
-    *  Compute MemPeStat in a map function (New Version).
-    *  Used after the required data are collected (reducer).
-    *
-    *  @param opt the input MemOptType object
-    *  @param distIterable the Iterable collections of dist variables
-    *  @return pes the pair-end statistics (output)
-    */
-  def memPeStatComputeNew(opt: MemOptType, distIterable: Iterable[Int]): MemPeStat = {
-    var pes = new MemPeStat
-    var iSize: Vector[Int] = scala.collection.immutable.Vector.empty
-    val distArray = distIterable.toArray
-
-    var i = 0
-    while(i < distArray.size) {
-      if(distArray(i) > 0 && distArray(i) <= opt.maxIns)
-        iSize = iSize :+ distArray(i)
-      i += 1
-    }
-   
-    if(iSize.size < MIN_DIR_CNT) {
-      pes.failed = 1
-    } 
-    else {
-      println("analyzing insert size distribution for orientation")
-      val q = iSize.sortWith(_.compareTo(_) < 0) // ks_introsort_64
-      var p25: Int = q((0.25 * iSize.size + 0.499).toInt)
-      var p50: Int = q((0.50 * iSize.size + 0.499).toInt)
-      var p75: Int = q((0.75 * iSize.size + 0.499).toInt)
-      pes.low = (p25 - OUTLIER_BOUND * (p75 - p25) + 0.499).toInt
-      if(pes.low < 1) pes.low = 1
-      pes.high = (p75 + OUTLIER_BOUND * (p75 - p25) + 0.499).toInt
-      println("(25, 50, 75) percentile: (" + p25 + ", " + p50 + ", " + p75 + ")")
-      println("low and high boundaries for computing mean and std.dev: (" + pes.low + ", " + pes.high + ")")
-
-      i = 0
-      var x = 0
-      pes.avg = 0
-      while(i < q.size) {
-        if(q(i) >= pes.low && q(i) <= pes.high) {
-          pes.avg += q(i)
-          x += 1
-        }
-        i += 1
-      }
-      pes.avg /= x
-        
-      i = 0
-      pes.std = 0
-      while(i < q.size) {
-        if(q(i) >= pes.low && q(i) <= pes.high)
-          pes.std += q(i) * q(i)
-
-        i += 1
-      }
-      pes.std = sqrt((pes.std / x) - (pes.avg * pes.avg))
-
-      pes.low = (p25 - MAPPING_BOUND * (p75 - p25) + .499).toInt
-      pes.high = (p75 + MAPPING_BOUND * (p75 - p25) + .499).toInt
-      if(pes.low > pes.avg - MAX_STDDEV * pes.std) pes.low = (pes.avg - MAX_STDDEV * pes.std + .499).toInt
-      if(pes.high < pes.avg - MAX_STDDEV * pes.std) pes.high = (pes.avg - MAX_STDDEV * pes.std + .499).toInt
-      if(pes.low < 1) pes.low = 1
-    }
-
-    pes.elementNum = iSize.size
-    pes
-  }
-
-
-  /**
-    *  Compute MemPeStat at the driver node (New version).
-    *  Used after the required data are collected (reducer).
-    *
-    *  @param opt the input MemOptType object
-    *  @param pes the pair-end statistics (output)
-    */
-  def memPeStatComputeDriverNew(opt: MemOptType, pes: Array[MemPeStat]) {
-    var d = 0
-    while(d < 4) {
-      if(pes(d).failed == 1) {
-        if(d == 0)
-          println("skip orientation FF as there are not enough pairs")
-        else if(d == 1)
-          println("skip orientation FR as there are not enough pairs")
-        else if(d == 2)
-          println("skip orientation RF as there are not enough pairs")
-        else if(d == 3)
-          println("skip orientation RR as there are not enough pairs")
-        d += 1
-      }
-      else {
-        println("mean and std.dev: (" + pes(d).avg + ", " + pes(d).std + ")")
-        println("low and high boundaries for proper pairs: (" + pes(d).low + ", " + pes(d).high + ")")
-        d += 1
-      }
-    } 
-
-    d = 0
-    var max = 0
-    while(d < 4) {
-      if(max < pes(d).elementNum) max = pes(d).elementNum
-      d += 1
-    }
-
-    d = 0
-    while(d < 4) {
-      if(pes(d).failed == 0 && pes(d).elementNum < max * MIN_DIR_RATIO) {
-        pes(d).failed = 1
-        if(d == 0)
-          println("skip orientation FF")
-        else if(d == 1)
-          println("skip orientation FR")
-        else if(d == 2)
-          println("skip orientation RF")
-        else if(d == 3)
-          println("skip orientation RR")
-      }     
-
-      d += 1
-    }
-  }
-
 
   /**
     *  Perform mate-SW algorithm.
