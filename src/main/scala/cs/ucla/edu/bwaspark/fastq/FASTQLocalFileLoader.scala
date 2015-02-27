@@ -1,12 +1,17 @@
 package cs.ucla.edu.bwaspark.fastq
 
-import java.io.{File, FileReader, BufferedReader, IOException, FileNotFoundException}
+import java.io.{File, FileReader, InputStreamReader, BufferedReader, IOException, FileNotFoundException}
 import java.nio.{ByteBuffer, CharBuffer}
 import java.nio.charset.{Charset, CharsetEncoder, CharacterCodingException}
 
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.rdd.RDD
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.Path;
 
 import scala.util.control.Breaks._
 import scala.List
@@ -100,7 +105,16 @@ class FASTQLocalFileLoader(batchedLineNum: Int) {
     *  @param filePartitionNum the number of partitions in HDFS of this batch. We suggest to set this number equal to the number of core in the cluster.
     */
   def storeFASTQInHDFS(sc: SparkContext, inFile: String, outFileRootPath: String, filePartitionNum: Int) {
-    val reader = new BufferedReader(new FileReader(inFile))
+    val conf = new Configuration
+    val fs = FileSystem.get(conf)
+    val path = new Path(inFile)
+    var reader: BufferedReader = null
+    if (fs.exists(path)) {
+      reader = new BufferedReader(new InputStreamReader(fs.open(path)))
+    }
+    else {
+      reader = new BufferedReader(new FileReader(inFile)) //file reader
+    }
 
     val parquetHadoopLogger = Logger.getLogger("parquet.hadoop")
     parquetHadoopLogger.setLevel(Level.SEVERE)
