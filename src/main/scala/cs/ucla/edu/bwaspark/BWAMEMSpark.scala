@@ -85,7 +85,7 @@ object BWAMEMSpark {
       bwamemArgs.jniLibPath = options('jniLibPath).toString
     if(options.get('outputChoice) != None) {
       val outputChoice = options('outputChoice).toString.toInt
-      if(outputChoice > 2) {
+      if(outputChoice > 3) {
         println("[Error] Undefined -oChoice argument" + outputChoice)
         exit(1)
       }
@@ -200,6 +200,7 @@ object BWAMEMSpark {
                       "                   0: no output (pure computation)\n" +
                       "                   1: SAM file output in the local file system (default)\n" +
                       "                   2: ADAM format output in the distributed file system\n" +
+                      "                   3: SAM format output in the distributed file system\n" +
                       "-oPath (optional): the output path; users need to provide correct path in the local or distributed file system\n\n\n" +
                       "Usage 3: merge the output ADAM folder pieces and save as a new ADAM file in HDFS\n" +
                       "Usage: merge adamHDFSRootInputPath adamHDFSOutputPath\n\n\n" +

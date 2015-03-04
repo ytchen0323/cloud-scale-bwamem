@@ -32,8 +32,9 @@ object FastMap {
   private val MEM_F_NO_MULTI = 0x10
   private val packageVersion = "cloud-scale-bwamem-0.1.0"
   private val NO_OUT_FILE = 0
-  private val SAM_OUT_FILE = 1
+  private val SAM_OUT_LOCAL = 1
   private val ADAM_OUT = 2
+  private val SAM_OUT_DFS = 3
 
   /**
     *  memMain: the main function to perform read mapping
@@ -84,12 +85,7 @@ object FastMap {
     
     // write SAM header
     println("Output choice: " + outputChoice)
-    var samWriter = new SAMWriter
-    if(outputChoice == SAM_OUT_FILE) {
-      samWriter.init(outputPath)
-      samWriter.writeString(samHeader.bwaGenSAMHeader(bwaIdx.bns, packageVersion))
-    }
-    else if(outputChoice == ADAM_OUT) {
+    if(outputChoice == ADAM_OUT) {
       samHeader.bwaGenSAMHeader(bwaIdx.bns, packageVersion, readGroupString, samFileHeader)
       seqDict = SequenceDictionary(samFileHeader)
       readGroupDict = RecordGroupDictionary.fromSAMHeader(samFileHeader)
@@ -99,24 +95,22 @@ object FastMap {
     // pair-end read mapping
     if(isPairEnd) {
       bwaMemOpt.flag |= MEM_F_PE
-      if(outputChoice == SAM_OUT_FILE)
+      if(outputChoice == SAM_OUT_LOCAL || outputChoice == SAM_OUT_DFS)
         memPairEndMapping(sc, fastaLocalInputPath, fastqHDFSInputPath, fastqInputFolderNum, batchFolderNum, bwaMemOpt, bwaIdx, 
-                          isPSWBatched, subBatchSize, isPSWJNI, jniLibPath, outputChoice, samWriter, outputPath, samHeader)
+                          isPSWBatched, subBatchSize, isPSWJNI, jniLibPath, outputChoice, outputPath, samHeader)
       else if(outputChoice == ADAM_OUT)
         memPairEndMapping(sc, fastaLocalInputPath, fastqHDFSInputPath, fastqInputFolderNum, batchFolderNum, bwaMemOpt, bwaIdx, 
-                          isPSWBatched, subBatchSize, isPSWJNI, jniLibPath, outputChoice, samWriter, outputPath, samHeader, seqDict, readGroup)
+                          isPSWBatched, subBatchSize, isPSWJNI, jniLibPath, outputChoice, outputPath, samHeader, seqDict, readGroup)
         
     }
     // single-end read mapping
     else {
-      if(outputChoice == SAM_OUT_FILE)
-        memSingleEndMapping(sc, fastaLocalInputPath, fastqHDFSInputPath, fastqInputFolderNum, batchFolderNum, bwaMemOpt, bwaIdx, outputChoice, samWriter, outputPath, samHeader)
+      if(outputChoice == SAM_OUT_LOCAL || outputChoice == SAM_OUT_DFS)
+        memSingleEndMapping(sc, fastaLocalInputPath, fastqHDFSInputPath, fastqInputFolderNum, batchFolderNum, bwaMemOpt, bwaIdx, outputChoice, outputPath, samHeader)
       else if(outputChoice == ADAM_OUT)
-        memSingleEndMapping(sc, fastaLocalInputPath, fastqHDFSInputPath, fastqInputFolderNum, batchFolderNum, bwaMemOpt, bwaIdx, outputChoice, samWriter, outputPath, samHeader, seqDict, readGroup)
+        memSingleEndMapping(sc, fastaLocalInputPath, fastqHDFSInputPath, fastqInputFolderNum, batchFolderNum, bwaMemOpt, bwaIdx, outputChoice, outputPath, samHeader, seqDict, readGroup)
     }
 
-    if(outputChoice == SAM_OUT_FILE) 
-      samWriter.close
   } 
 
 
@@ -131,23 +125,35 @@ object FastMap {
     *  @param bwaMemOpt the MemOptType object
     *  @param bwaIdx the BWAIdxType object
     *  @param outputChoice the output format choice
-    *  @param samWriter the writer to write SAM file at the local file system
     *  @param outputPath the output path in the local or distributed file system
     *  @param samHeader the SAM header file used for writing SAM output file
     *  @param seqDict (optional) the sequences (chromosome) dictionary: used for ADAM format output
     *  @param readGroup (optional) the read group: used for ADAM format output
     */
   private def memSingleEndMapping(sc: SparkContext, fastaLocalInputPath: String, fastqHDFSInputPath: String, fastqInputFolderNum: Int, batchFolderNum: Int, 
-                                  bwaMemOpt: MemOptType, bwaIdx: BWAIdxType, outputChoice: Int, samWriter: SAMWriter, outputPath: String, samHeader: SAMHeader,
+                                  bwaMemOpt: MemOptType, bwaIdx: BWAIdxType, outputChoice: Int, outputPath: String, samHeader: SAMHeader,
                                   seqDict: SequenceDictionary = null, readGroup: RecordGroup = null) 
   {
+    // Initialize output writer
+    val samWriter = new SAMWriter
+    val samHDFSWriter = new SAMHDFSWriter(outputPath)
+    if(outputChoice == SAM_OUT_LOCAL) {
+      samWriter.init(outputPath)
+      samWriter.writeString(samHeader.bwaGenSAMHeader(bwaIdx.bns, packageVersion))
+    }
+    else if(outputChoice == SAM_OUT_DFS) {
+      samHDFSWriter.init
+      samHDFSWriter.writeString(samHeader.bwaGenSAMHeader(bwaIdx.bns, packageVersion))
+    }
 
     // broadcast shared variables
-    val bwaIdxGlobal = sc.broadcast(bwaIdx, fastaLocalInputPath)  // read from local disks!!!
+    //val bwaIdxGlobal = sc.broadcast(bwaIdx, fastaLocalInputPath)  // read from local disks!!!
+    val bwaIdxGlobal = sc.broadcast(bwaIdx)  // broadcast
     val bwaMemOptGlobal = sc.broadcast(bwaMemOpt)
     val fastqRDDLoader = new FASTQRDDLoader(sc, fastqHDFSInputPath, fastqInputFolderNum)
 
     // Not output SAM file
+    // For runtime estimation
     if(outputChoice == NO_OUT_FILE) {
       // loading reads
       println("Load FASTQ files")
@@ -160,7 +166,7 @@ object FastMap {
       println("Count: " + c)
     }
     // output SAM file
-    else if(outputChoice == SAM_OUT_FILE) {
+    else if(outputChoice == SAM_OUT_LOCAL || outputChoice == SAM_OUT_DFS) {
       var numProcessed: Long = 0
 
       // Process the reads in a batched fashion
@@ -177,16 +183,28 @@ object FastMap {
           i += restFolderNum
         }
 
-        // worker1, worker2, and return SAM format strings
-        val samStrings = singleEndFASTQRDD.map(seq => bwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, seq) )
-                                          .map(r => singleEndBwaMemWorker2(bwaMemOptGlobal.value, r.regs, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, r.seq, numProcessed, samHeader) )
-                                          .collect
-
-        numProcessed += samStrings.size
-
-        // Write to the output file in a sequencial way (for now)
-        samWriter.writeStringArray(samStrings)
+        // Write to an output file in the local file system in a sequencial way 
+        if(outputChoice == SAM_OUT_LOCAL) {
+          // worker1, worker2, and return SAM format strings
+          val samStrings = singleEndFASTQRDD.map(seq => bwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, seq) )
+                                            .map(r => singleEndBwaMemWorker2(bwaMemOptGlobal.value, r.regs, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, r.seq, numProcessed, samHeader) )
+                                            .collect
+          numProcessed += samStrings.size
+          samWriter.writeStringArray(samStrings)
+        }
+        // Write to HDFS
+        else if(outputChoice == SAM_OUT_DFS) {
+          // worker1, worker2, and return SAM format strings
+          val samStrings = singleEndFASTQRDD.map(seq => bwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, seq) )
+                                            .map(r => singleEndBwaMemWorker2(bwaMemOptGlobal.value, r.regs, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, r.seq, numProcessed, samHeader) )
+          samStrings.saveAsTextFile(outputPath + "/body")
+        }
       }
+
+      if(outputChoice == SAM_OUT_LOCAL)
+        samWriter.close
+      else if(outputChoice == SAM_OUT_DFS)
+        samHDFSWriter.close
     } 
     // output ADAM format to the distributed file system
     else if(outputChoice == ADAM_OUT) {
@@ -247,7 +265,6 @@ object FastMap {
     *  @param isPSWJNI whether the native JNI library is called for better performance
     *  @param jniLibPath the JNI library path in the local machine
     *  @param outputChoice the output format choice
-    *  @param samWriter the writer to write SAM file at the local file system
     *  @param outputPath the output path in the local or distributed file system
     *  @param samHeader the SAM header file used for writing SAM output file
     *  @param seqDict (optional) the sequences (chromosome) dictionary: used for ADAM format output
@@ -255,11 +272,23 @@ object FastMap {
     */
   private def memPairEndMapping(sc: SparkContext, fastaLocalInputPath: String, fastqHDFSInputPath: String, fastqInputFolderNum: Int, batchFolderNum: Int, 
                                 bwaMemOpt: MemOptType, bwaIdx: BWAIdxType, isPSWBatched: Boolean, subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String, 
-                                outputChoice: Int, samWriter: SAMWriter, outputPath: String, samHeader: SAMHeader, seqDict: SequenceDictionary = null, readGroup: RecordGroup = null) 
+                                outputChoice: Int, outputPath: String, samHeader: SAMHeader, seqDict: SequenceDictionary = null, readGroup: RecordGroup = null) 
   {
+    // Initialize output writer
+    val samWriter = new SAMWriter
+    val samHDFSWriter = new SAMHDFSWriter(outputPath)
+    if(outputChoice == SAM_OUT_LOCAL) {
+      samWriter.init(outputPath)
+      samWriter.writeString(samHeader.bwaGenSAMHeader(bwaIdx.bns, packageVersion))
+    }
+    else if(outputChoice == SAM_OUT_DFS) {
+      samHDFSWriter.init
+      samHDFSWriter.writeString(samHeader.bwaGenSAMHeader(bwaIdx.bns, packageVersion))
+    }
 
     // broadcast shared variables
-    val bwaIdxGlobal = sc.broadcast(bwaIdx, fastaLocalInputPath)  // read from local disks!!!
+    //val bwaIdxGlobal = sc.broadcast(bwaIdx, fastaLocalInputPath)  // read from local disks!!!
+    val bwaIdxGlobal = sc.broadcast(bwaIdx)  // broadcast
     val bwaMemOptGlobal = sc.broadcast(bwaMemOpt)
 
     // Used to avoid time consuming adamRDD.count (numProcessed += adamRDD.count)
@@ -342,7 +371,7 @@ object FastMap {
           reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
         }
         // Output SAM format file
-        else if(outputChoice == SAM_OUT_FILE) {
+        else if(outputChoice == SAM_OUT_LOCAL || outputChoice == SAM_OUT_DFS) {
           def it2ArrayIt(iter: Iterator[PairEndReadType]): Iterator[Array[Array[String]]] = {
             var counter = 0
             var ret: Vector[Array[Array[String]]] = scala.collection.immutable.Vector.empty
@@ -360,18 +389,26 @@ object FastMap {
             ret.toArray.iterator
           }
  
-          val samStrings = reads.mapPartitions(it2ArrayIt).collect
-          println("Count: " + samStrings.size)
-          reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
+          if(outputChoice == SAM_OUT_LOCAL) {
+            val samStrings = reads.mapPartitions(it2ArrayIt).collect
+            //val samStrings = reads.mapPartitions(it2ArrayIt).flatMap(s => s).map(pairSeq => pairSeq(0) + pairSeq(1)).collect
+            println("Count: " + samStrings.size)
+            reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
  
-          // Write to the output file in a sequencial way (for now)
-          samStrings.foreach(s => {
-            s.foreach(pairSeq => {
-              samWriter.writeString(pairSeq(0))
-              samWriter.writeString(pairSeq(1))
+            // Write to the output file in a sequencial way (for now)
+            samStrings.foreach(s => {
+              s.foreach(pairSeq => {
+                samWriter.writeString(pairSeq(0))
+                samWriter.writeString(pairSeq(1))
+              } )
             } )
-          } )
-  
+            //samStrings.foreach(s => samWriter.writeString(s))
+          }
+          else if(outputChoice == SAM_OUT_DFS) {
+            val samStrings = reads.mapPartitions(it2ArrayIt).flatMap(s => s).map(pairSeq => pairSeq(0) + pairSeq(1))
+            reads.unpersist(true)
+            samStrings.saveAsTextFile(outputPath + "/body")
+          }
         }
         // Output ADAM format file
         else if(outputChoice == ADAM_OUT) {
@@ -410,6 +447,10 @@ object FastMap {
  
     }
 
+    if(outputChoice == SAM_OUT_LOCAL)
+      samWriter.close
+    else if(outputChoice == SAM_OUT_DFS)
+      samHDFSWriter.close
   }
 
 } 

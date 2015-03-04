@@ -11,10 +11,10 @@
         <scala.version>2.10.3</scala.version>
         <scala.artifact.suffix>2.10</scala.artifact.suffix>
         <avro.version>1.7.6</avro.version>
-        <spark.version>1.1.0</spark.version>
+        <spark.version>1.2.1</spark.version>
         <parquet.version>1.4.3</parquet.version>
         <!-- Edit the following line to configure the Hadoop (HDFS) version. -->
-        <hadoop.version>2.4.1</hadoop.version>
+        <hadoop.version>2.5.2</hadoop.version>
     </properties>
 
     <repositories>
@@ -241,7 +241,7 @@
             <artifactId>spark-core_${scala.artifact.suffix}</artifactId>
             <version>${spark.version}</version>
             <scope>system</scope>
-            <systemPath>/home/pengwei/spark-1.1.0/assembly/target/scala-2.10/spark-assembly-1.1.0-hadoop2.4.1.jar</systemPath>
+            <systemPath>/cdsc_nfs/cdsc0/software/spark/spark-1.2.1/assembly/target/scala-2.10/spark-assembly-1.2.1-hadoop2.5.2.jar</systemPath>
             <exclusions>
               <exclusion>
                 <groupId>org.apache.hadoop</groupId>
