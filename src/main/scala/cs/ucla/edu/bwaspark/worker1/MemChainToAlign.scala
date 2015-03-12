@@ -38,7 +38,7 @@ object MemChainToAlign {
     var chains: MutableList[MemChainType] = new MutableList
     var chainPos: Long = 0
     var seeds: MutableList[MemSeedType] = new MutableList
-    var seq: Array[Byte] = new Array[Byte](101)
+    var seq: Array[Byte] = new Array[Byte](101)  // assume the size to be 101 (not true for all kinds of reads)
 
     while(line != null) {
       val lineFields = line.split(" ")      

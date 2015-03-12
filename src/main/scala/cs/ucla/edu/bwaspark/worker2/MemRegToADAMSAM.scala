@@ -55,7 +55,7 @@ object MemRegToADAMSAM {
         if(regs(i).score >= opt.T) {
           if(regs(i).secondary < 0 || ((opt.flag & MEM_F_ALL) > 0)) {
             if(regs(i).secondary < 0 || regs(i).score >= regs(regs(i).secondary).score * 0.5) {
-              var aln = memRegToAln(opt, bns, pac, seq.seqLength, seqTrans, regs(i))   // NOTE: current data structure has not been obtained from RDD. We assume the length to be 101 here
+              var aln = memRegToAln(opt, bns, pac, seq.seqLength, seqTrans, regs(i)) 
               alns += aln
               aln.flag |= extraFlag   // flag secondary
               if(regs(i).secondary >= 0) aln.sub = -1   // don't output sub-optimal score
@@ -920,7 +920,7 @@ object MemRegToADAMSAM {
         if(regs(i).score >= opt.T) {
           if(regs(i).secondary < 0 || ((opt.flag & MEM_F_ALL) > 0)) {
             if(regs(i).secondary < 0 || regs(i).score >= regs(regs(i).secondary).score * 0.5) {
-              var aln = memRegToAln(opt, bns, pac, seq.seqLength, seqTrans, regs(i))   // NOTE: current data structure has not been obtained from RDD. We assume the length to be 101 here
+              var aln = memRegToAln(opt, bns, pac, seq.seqLength, seqTrans, regs(i)) 
               alns += aln
               aln.flag |= extraFlag   // flag secondary
               if(regs(i).secondary >= 0) aln.sub = -1   // don't output sub-optimal score
