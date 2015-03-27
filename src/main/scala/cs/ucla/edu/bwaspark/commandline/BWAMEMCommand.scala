@@ -15,5 +15,6 @@ class BWAMEMCommand {
                                                        //            1: SAM file output in the local file system (default)
                                                        //            2: ADAM format output in the distributed file system
     var outputPath: String = "output.sam"              // (optional) the output path; users need to provide correct path in the local or distributed file system
+    var headerLine: String = "@RG\tID:foo\tSM:bar";    // (should be added in normal case) Complete read group header line: Example: @RG\tID:foo\tSM:bar
 }
 

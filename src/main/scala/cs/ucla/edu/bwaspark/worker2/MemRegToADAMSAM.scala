@@ -524,12 +524,16 @@ object MemRegToADAMSAM {
     // seq.comment is a Java ByteBuffer
     // When using decode(seq.comment), it is a destructive operation
     // Therefore, we need to create a copy of ByteBuffer for seq.comment
-    val bbComment = ByteBuffer.wrap(seq.comment.array)
-    val comment = Charset.forName("ISO-8859-1").decode(bbComment).array;
-    if(comment.size > 0) {
-      samStr.addChar('\t')
-      samStr.addCharArray(comment)
-    }
+    // DO NOT include comments in the SAM output
+    // It seems that Samtools does not take this
+    
+    //val bbComment = ByteBuffer.wrap(seq.comment.array)
+    //val comment = Charset.forName("ISO-8859-1").decode(bbComment).array;
+    //if(comment.size > 0) {
+    //  samStr.addChar('\t')
+    //  samStr.addCharArray(comment)
+    //}
+
     samStr.addChar('\n')
 
   }

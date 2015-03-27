@@ -16,6 +16,7 @@ import cs.ucla.edu.bwaspark.debug.DebugFlag._
 import cs.ucla.edu.bwaspark.fastq._
 import cs.ucla.edu.bwaspark.util.SWUtil._
 import cs.ucla.edu.avro.fastq._
+import cs.ucla.edu.bwaspark.commandline._
 
 import org.bdgenomics.formats.avro.AlignmentRecord
 import org.bdgenomics.adam.rdd.ADAMContext._
@@ -40,20 +41,22 @@ object FastMap {
     *  memMain: the main function to perform read mapping
     *
     *  @param sc the spark context object
-    *  @param fastaLocalInputPath the local BWA index files (bns, pac, and so on)
-    *  @param fastqHDFSInputPath the raw read file stored in HDFS
-    *  @param isPairEnd perform pair-end or single-end mapping
-    *  @param fastqInputFolderNum the number of folders generated in the HDFS for the raw reads
-    *  @param batchFolderNum the number of raw read folders in a batch to be processed
-    *  @param isPSWBatched whether the pair-end Smith Waterman is performed in a batched way
-    *  @param subBatchSize the number of reads to be processed in a subbatch
-    *  @param isPSWJNI whether the native JNI library is called for better performance
-    *  @param jniLibPath the JNI library path in the local machine
-    *  @param outputChoice the output format choice
-    *  @param outputPath the output path in the local or distributed file system
+    *  @param bwamemArgs the arguments of CS-BWAMEM
     */
-  def memMain(sc: SparkContext, fastaLocalInputPath: String, fastqHDFSInputPath: String, isPairEnd: Boolean, fastqInputFolderNum: Int, batchFolderNum: Int,
-              isPSWBatched: Boolean, subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String, outputChoice: Int, outputPath: String) {
+  def memMain(sc: SparkContext, bwamemArgs: BWAMEMCommand) 
+  {
+    val fastaLocalInputPath = bwamemArgs.fastaInputPath        // the local BWA index files (bns, pac, and so on)
+    val fastqHDFSInputPath = bwamemArgs.fastqHDFSInputPath     // the raw read file stored in HDFS
+    val isPairEnd = bwamemArgs.isPairEnd                       // perform pair-end or single-end mapping
+    val fastqInputFolderNum = bwamemArgs.fastqInputFolderNum   // the number of folders generated in the HDFS for the raw reads
+    val batchFolderNum = bwamemArgs.batchedFolderNum             // the number of raw read folders in a batch to be processed
+    val isPSWBatched = bwamemArgs.isPSWBatched                 // whether the pair-end Smith Waterman is performed in a batched way
+    val subBatchSize = bwamemArgs.subBatchSize                 // the number of reads to be processed in a subbatch
+    val isPSWJNI = bwamemArgs.isPSWJNI                         // whether the native JNI library is called for better performance
+    val jniLibPath = bwamemArgs.jniLibPath                     // the JNI library path in the local machine
+    val outputChoice = bwamemArgs.outputChoice                 // the output format choice
+    val outputPath = bwamemArgs.outputPath                     // the output path in the local or distributed file system
+    val readGroupString = bwamemArgs.headerLine        // complete read group header line: Example: @RG\tID:foo\tSM:bar
 
     val samHeader = new SAMHeader
     var adamHeader = new SequenceDictionary
@@ -61,14 +64,13 @@ object FastMap {
     var seqDict: SequenceDictionary = null
     var readGroupDict: RecordGroupDictionary = null
     var readGroup: RecordGroup = null
-    val readGroupString: String = "@RG\tID:HCC1954\tLB:HCC1954\tSM:HCC1954"
-    val readGroupName = "HCC1954"
 
-    if(samHeader.bwaSetReadGroup("@RG\tID:HCC1954\tLB:HCC1954\tSM:HCC1954")) {
-      println("Read line: " + samHeader.readGroupLine)
+    if(samHeader.bwaSetReadGroup(readGroupString)) {
+      println("Head line: " + samHeader.readGroupLine)
       println("Read Group ID: " + samHeader.bwaReadGroupID)
     }
     else println("Error on reading header")
+    val readGroupName = samHeader.bwaReadGroupID
 
     // loading index files
     println("Load Index Files")
@@ -199,6 +201,8 @@ object FastMap {
                                             .map(r => singleEndBwaMemWorker2(bwaMemOptGlobal.value, r.regs, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, r.seq, numProcessed, samHeader) )
           samStrings.saveAsTextFile(outputPath + "/body")
         }
+ 
+        singleEndFASTQRDD.unpersist(true)
       }
 
       if(outputChoice == SAM_OUT_LOCAL)
@@ -240,6 +244,9 @@ object FastMap {
         adamRDD.adamSave(outputPath + "/"  + folderID.toString())
         numProcessed += batchedReadNum
         folderID += 1
+
+        singleEndFASTQRDD.unpersist(true)
+        adamRDD.unpersist(true)
       }
     }
     else {
@@ -328,6 +335,7 @@ object FastMap {
       // Worker1 (Map step)
       println("@Worker1")
       val reads = pairEndFASTQRDD.map( pairSeq => pairEndBwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, pairSeq) ) 
+      pairEndFASTQRDD.unpersist(true)
       reads.cache
 
       // MemPeStat (Reduce step)
