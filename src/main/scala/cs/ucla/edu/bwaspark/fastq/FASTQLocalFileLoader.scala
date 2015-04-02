@@ -53,8 +53,19 @@ class FASTQLocalFileLoader(batchedLineNum: Int) {
         var tmpStr = new String
 
         if(lineFields.length == 1) {
-          if(lineFields(0).charAt(0) == '@') tmpStr = lineFields(0).substring(1).dropRight(2)
-          else tmpStr = lineFields(0).dropRight(2)
+          val n = lineFields(0).size
+          if(lineFields(0).charAt(0) == '@') {
+            if(lineFields(0).substring(n-2).equals("/1") || lineFields(0).substring(n-2).equals("/2"))
+              tmpStr = lineFields(0).substring(1, n-2)
+            else
+              tmpStr = lineFields(0).substring(1)
+          }
+          else {
+            if(lineFields(0).substring(n-2).equals("/1") || lineFields(0).substring(n-2).equals("/2"))
+              tmpStr = lineFields(0).dropRight(2)
+            else
+              tmpStr = lineFields(0)
+          }
           val name = encoder.encode( CharBuffer.wrap(tmpStr) )
           val seqString = reader.readLine()
           val seqLength = seqString.size
@@ -66,8 +77,19 @@ class FASTQLocalFileLoader(batchedLineNum: Int) {
           records = records :+ record
         } 
         else if(lineFields.length == 2) {
-          if(lineFields(0).charAt(0) == '@') tmpStr = lineFields(0).substring(1).dropRight(2)
-          else tmpStr = lineFields(0).dropRight(2)
+          val n = lineFields(0).size
+          if(lineFields(0).charAt(0) == '@') {
+            if(lineFields(0).substring(n-2).equals("/1") || lineFields(0).substring(n-2).equals("/2"))
+              tmpStr = lineFields(0).substring(1, n-2)
+            else
+              tmpStr = lineFields(0).substring(1)
+          }
+          else {
+            if(lineFields(0).substring(n-2).equals("/1") || lineFields(0).substring(n-2).equals("/2"))
+              tmpStr = lineFields(0).dropRight(2)
+            else
+              tmpStr = lineFields(0)
+          }
           val name = encoder.encode( CharBuffer.wrap(tmpStr) )
           val comment = encoder.encode( CharBuffer.wrap(lineFields(1)) );
           val seqString = reader.readLine()
@@ -171,8 +193,19 @@ class FASTQLocalFileLoader(batchedLineNum: Int) {
         var tmpStr = new String
        
         if(lineFields.length == 1) {
-          if(lineFields(0).charAt(0) == '@') tmpStr = lineFields(0).substring(1).dropRight(2)
-          else tmpStr = lineFields(0).dropRight(2)
+          val n = lineFields(0).size
+          if(lineFields(0).charAt(0) == '@') {
+            if(lineFields(0).substring(n-2).equals("/1") || lineFields(0).substring(n-2).equals("/2")) 
+              tmpStr = lineFields(0).substring(1, n-2)
+            else
+              tmpStr = lineFields(0).substring(1)
+          }
+          else {
+            if(lineFields(0).substring(n-2).equals("/1") || lineFields(0).substring(n-2).equals("/2"))
+              tmpStr = lineFields(0).dropRight(2)
+            else
+              tmpStr = lineFields(0)
+          }
           val name = encoder.encode( CharBuffer.wrap(tmpStr) )
           val seqString = reader1.readLine()
           val seqLength = seqString.size
@@ -184,8 +217,19 @@ class FASTQLocalFileLoader(batchedLineNum: Int) {
           pairEndRecord.setSeq0(new SerializableFASTQRecord(record))
         } 
         else if(lineFields.length == 2) {
-          if(lineFields(0).charAt(0) == '@') tmpStr = lineFields(0).substring(1).dropRight(2)
-          else tmpStr = lineFields(0).dropRight(2)
+          val n = lineFields(0).size
+          if(lineFields(0).charAt(0) == '@') {
+            if(lineFields(0).substring(n-2).equals("/1") || lineFields(0).substring(n-2).equals("/2"))
+              tmpStr = lineFields(0).substring(1, n-2)
+            else
+              tmpStr = lineFields(0).substring(1)
+          }
+          else {
+            if(lineFields(0).substring(n-2).equals("/1") || lineFields(0).substring(n-2).equals("/2"))
+              tmpStr = lineFields(0).dropRight(2)
+            else
+              tmpStr = lineFields(0)
+          }
           val name = encoder.encode( CharBuffer.wrap(tmpStr) )
           val comment = encoder.encode( CharBuffer.wrap(lineFields(1)) );
           val seqString = reader1.readLine()
@@ -207,8 +251,19 @@ class FASTQLocalFileLoader(batchedLineNum: Int) {
           val lineFields = line.split(" ")
                 
           if(lineFields.length == 1) {
-            if(lineFields(0).charAt(0) == '@') tmpStr = lineFields(0).substring(1).dropRight(2)
-            else tmpStr = lineFields(0).dropRight(2)
+            val n = lineFields(0).size
+            if(lineFields(0).charAt(0) == '@') {
+              if(lineFields(0).substring(n-2).equals("/1") || lineFields(0).substring(n-2).equals("/2"))
+                tmpStr = lineFields(0).substring(1, n-2)
+              else
+                tmpStr = lineFields(0).substring(1)
+            }
+            else {
+              if(lineFields(0).substring(n-2).equals("/1") || lineFields(0).substring(n-2).equals("/2"))
+                tmpStr = lineFields(0).dropRight(2)
+              else
+                tmpStr = lineFields(0)
+            }
             val name = encoder.encode( CharBuffer.wrap(tmpStr) )
             val seqString = reader2.readLine()
             val seqLength = seqString.size
@@ -220,8 +275,19 @@ class FASTQLocalFileLoader(batchedLineNum: Int) {
             pairEndRecord.setSeq1(new SerializableFASTQRecord(record))
           } 
           else if(lineFields.length == 2) {
-            if(lineFields(0).charAt(0) == '@') tmpStr = lineFields(0).substring(1).dropRight(2)
-            else tmpStr = lineFields(0).dropRight(2)
+            val n = lineFields(0).size
+            if(lineFields(0).charAt(0) == '@') {
+              if(lineFields(0).substring(n-2).equals("/1") || lineFields(0).substring(n-2).equals("/2"))
+                tmpStr = lineFields(0).substring(1, n-2)
+              else
+                tmpStr = lineFields(0).substring(1)
+            }
+            else {
+              if(lineFields(0).substring(n-2).equals("/1") || lineFields(0).substring(n-2).equals("/2"))
+                tmpStr = lineFields(0).dropRight(2)
+              else
+                tmpStr = lineFields(0)
+            }
             val name = encoder.encode( CharBuffer.wrap(tmpStr) )
             val comment = encoder.encode( CharBuffer.wrap(lineFields(1)) );
             val seqString = reader2.readLine()

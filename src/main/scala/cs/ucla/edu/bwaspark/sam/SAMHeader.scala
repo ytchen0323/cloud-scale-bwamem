@@ -123,7 +123,7 @@ class SAMHeader extends Serializable {
 
 
   def bwaSetReadGroup(str: String): Boolean = {
-    val rgPattern = """@RG\s+ID:(\w+)""".r
+    val rgPattern = """@RG\s+ID:([\w_-]+)""".r
     bwaReadGroupID = rgPattern findFirstIn str match {
       case Some (rgPattern(rgID)) => rgID
       case None => "Not matched"
