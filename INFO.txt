@@ -1,0 +1,5 @@
+Data files from cdsc0:
+
+/hdfs2/data/InputFiles/HCC1954/HCC1954_2.fq
+/hdfs2/data/InputFiles/HCC1954/HCC1954_2.fq
+/hdfs2/data/ReferenceMetadata

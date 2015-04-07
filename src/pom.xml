@@ -16,7 +16,7 @@
       <version>0.1.0</version>
       <type>jar</type>
       <scope>system</scope>
-      <systemPath>/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/cloud-scale-bwamem-0.1.0-assembly.jar</systemPath>
+      <systemPath>/home/jmg3/cloud-scale-bwamem-0.1.0/target/cloud-scale-bwamem-0.1.0-assembly.jar</systemPath>
     </dependency>   
   </dependencies>
   
