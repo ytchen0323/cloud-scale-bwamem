@@ -36,37 +36,37 @@ object BWAMemWorker1Batched {
                            pac: Array[Byte], //.pac file uint8_t
                            pes: Array[MemPeStat], //pes array
                            seqArray: Array[FASTQRecord], //the batched reads
-                           numOfReads: Int //the number of the batched reads
+                           numOfReads: Int, //the number of the batched reads
+			   runOnFPGA: Boolean, //if run on FPGA
+			   threshold: Int //the batch threshold to run on FPGA
                            ): Array[ReadType] = { //all possible alignments for all the reads  
 
-    //for paired alignment, to add
-    //!!!to add!!!
-    //for now, we only focus on single sequence alignment
-    //if (!(opt.flag & MEM_F_PE)) {
-    if (true) {
+    //pre-process: transform A/C/G/T to 0,1,2,3
 
-      //pre-process: transform A/C/G/T to 0,1,2,3
-
-      def locusEncode(locus: Char): Byte = {
-        //transforming from A/C/G/T to 0,1,2,3
-        locus match {
-          case 'A' => 0
-          case 'a' => 0
-          case 'C' => 1
-          case 'c' => 1
-          case 'G' => 2
-          case 'g' => 2
-          case 'T' => 3
-          case 't' => 3
-          case '-' => 5
-          case _ => 4
-        }
+    def locusEncode(locus: Char): Byte = {
+      //transforming from A/C/G/T to 0,1,2,3
+      locus match {
+        case 'A' => 0
+        case 'a' => 0
+        case 'C' => 1
+        case 'c' => 1
+        case 'G' => 2
+        case 'g' => 2
+        case 'T' => 3
+        case 't' => 3
+        case '-' => 5
+        case _ => 4
       }
+    }
 
       val readArray = new Array[Array[Byte]](numOfReads)
-      for (i <- 0 until numOfReads) readArray(i) = (new String(seqArray(i).getSeq.array)).toCharArray.map(locus => locusEncode(locus))
       val lenArray = new Array[Int](numOfReads)
-      for (i <- 0 until numOfReads) lenArray(i) = seqArray(i).getSeqLength.toInt
+      var i = 0
+      while (i < numOfReads) {
+        readArray(i) = (new String(seqArray(i).getSeq.array)).toCharArray.map(locus => locusEncode(locus))
+        lenArray(i) = seqArray(i).getSeqLength.toInt
+        i = i + 1
+      }
 
       //first & second step: chaining and filtering
       val chainsFilteredArray = new Array[Array[MemChainType]](numOfReads)
@@ -116,7 +116,7 @@ object BWAMemWorker1Batched {
       if (debugLevel == 1) println("Finished the pre-processing part")
 
 
-      memChainToAlnBatched(opt, bns.l_pac, pac, lenArray, readArray, numOfReads, preResultsOfSW, chainsFilteredArray, regArrays)
+      memChainToAlnBatched(opt, bns.l_pac, pac, lenArray, readArray, numOfReads, preResultsOfSW, chainsFilteredArray, regArrays, runOnFPGA, threshold)
       if (debugLevel == 1) println("Finished the batched-processing part")
       regArrays.foreach(ele => {if (ele != null) ele.regs = ele.regs.filter(r => (r != null))})
       regArrays.foreach(ele => {if (ele != null) ele.maxLength = ele.regs.length})
@@ -128,9 +128,44 @@ object BWAMemWorker1Batched {
       }
       readRetArray
     }
-    else {
-      assert (false)
-      null
+
+  /**
+    *  Perform BWAMEM worker1 function for pair-end alignment
+    *
+    *  @param opt the MemOptType object, BWAMEM options
+    *  @param bwt BWT and Suffix Array
+    *  @param bns .ann, .amb files
+    *  @param pac .pac file (PAC array: uint8_t)
+    *  @param pes pes array for worker2
+    *  @param pairSeqs a read with both ends
+    *  
+    *  Return: a read with alignments on both ends
+    */
+  def pairEndBwaMemWorker1Batched(opt: MemOptType, //BWA MEM options
+                           bwt: BWTType, //BWT and Suffix Array
+                           bns: BNTSeqType, //.ann, .amb files
+                           pac: Array[Byte], //.pac file uint8_t
+                           pes: Array[MemPeStat], //pes array
+			   seqArray0: Array[FASTQRecord], //the first batch
+			   seqArray1: Array[FASTQRecord], //the second batch
+			   numOfReads: Int, //the number of reads in each batch
+			   runOnFPGA: Boolean, //if run on FPGA
+			   threshold: Int //the batch threshold to run on FPGA
+                          ): Array[PairEndReadType] = { //all possible alignment  
+ 
+    val readArray0 = bwaMemWorker1(opt, bwt, bns, pac, pes, seqArray0, numOfReads, runOnFPGA, threshold)
+    val readArray1 = bwaMemWorker1(opt, bwt, bns, pac, pes, seqArray1, numOfReads, runOnFPGA, threshold)
+    var pairEndReadArray = new Array[PairEndReadType](numOfReads)
+    var i = 0
+    while (i < numOfReads) {
+      pairEndReadArray(i) = new PairEndReadType
+      pairEndReadArray(i).seq0 = readArray0(i).seq
+      pairEndReadArray(i).regs0 = readArray0(i).regs
+      pairEndReadArray(i).seq1 = readArray1(i).seq
+      pairEndReadArray(i).regs1 = readArray1(i).regs
+      i = i + 1
     }
+
+    pairEndReadArray // return
   }
 }

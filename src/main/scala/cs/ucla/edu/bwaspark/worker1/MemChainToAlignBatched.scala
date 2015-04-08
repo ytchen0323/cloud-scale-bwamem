@@ -53,7 +53,7 @@ object MemChainToAlignBatched {
     var chains: MutableList[MemChainType] = new MutableList
     var chainPos: Long = 0
     var seeds: MutableList[MemSeedType] = new MutableList
-    var seq: Array[Byte] = new Array[Byte](101) // assume the size to be 101 (not true for all kinds of reads)
+    var seq: Array[Byte] = new Array[Byte](101)  // assume the size to be 101 (not true for all kinds of reads)
 
     while(line != null) {
       val lineFields = line.split(" ")      
@@ -111,28 +111,21 @@ object MemChainToAlignBatched {
     testReadChains.foreach(r => printChains(r.chains))
   }
 
-  //to be modified: useFPGA decides whether FPGA or CPU will be used for computation
-  //val useFPGA = false
-  val useFPGA = true
-
-  //Sizes of Kernel Components
-  val commonSize = 32
-  val indivSize = 32
-  val retValues = 8
-
   //Run DPs on FPGA
   def runOnFPGA(taskNum: Int, //number of tasks
+		TOTAL_TASK_NUM: Int,
                 tasks: Array[ExtParam], // task array
                 results: Array[ExtRet] // result array
                 ) {
-      //val timer1 = new MyTimer( );
-      val writer = System.out;
-      //writer.println("Start call FPGA");
-      val conn = new Connector2FPGA("127.0.0.1", 5000);
-      conn.buildConnection( 1 );
+      //Sizes of Kernel Components
+      val commonSize = 32
+      val indivSize = 32
+      val retValues = 8
+      val DATA_SIZE = TOTAL_TASK_NUM * 256
+      val RESULT_SIZE = TOTAL_TASK_NUM * 16
 
       val buf1Len = commonSize + indivSize*taskNum
-      val buf1 = ByteBuffer.allocate(buf1Len).order(ByteOrder.nativeOrder())
+      val buf1 = ByteBuffer.allocate(DATA_SIZE).order(ByteOrder.nativeOrder())
       buf1.put(tasks(0).oDel.toByte)
       buf1.put(tasks(0).eDel.toByte)
       buf1.put(tasks(0).oIns.toByte)
@@ -147,7 +140,6 @@ object MemChainToAlignBatched {
       buf1.putInt(0)
       buf1.putInt(0)
       buf1.putInt(0)
-
       var i = 0
       var leftMaxIns = 0
       var leftMaxDel = 0
@@ -160,7 +152,7 @@ object MemChainToAlignBatched {
         buf1.putShort(tasks(i).rightQlen.toShort)
         buf1.putShort(tasks(i).rightRlen.toShort)
         buf1.putInt(taskPos)
-        taskPos += (tasks(i).leftQlen + tasks(i).leftRlen + tasks(i).rightQlen + tasks(i).rightRlen)
+        taskPos += ((((tasks(i).leftQlen + tasks(i).leftRlen + tasks(i).rightQlen + tasks(i).rightRlen)+1)/2)+3)/4
         buf1.putShort(tasks(i).regScore.toShort)
         buf1.putShort(tasks(i).qBeg.toShort)
         buf1.putShort(tasks(i).h0.toShort)
@@ -173,42 +165,73 @@ object MemChainToAlignBatched {
         buf1.putShort(leftMaxDel.toShort)
         buf1.putShort(rightMaxIns.toShort)
         buf1.putShort(rightMaxDel.toShort)
-        buf1.putInt(0)
+	buf1.putInt(tasks(i).idx)
 
         i = i+1
       }
-      //timer1.report( );
-	    //writer.println("Start writing parameters");
-      conn.send(taskNum)
-      conn.send(buf1);
-      taskPos -= (buf1Len >> 2) 
-      val buf2 = ByteBuffer.allocate(taskPos*4).order(ByteOrder.nativeOrder())
       i = 0
+      var j = 0
+      var tmpIntVar = 0
+      var counter8 = 0
       while (i < taskNum) {
         if (tasks(i).leftQlen > 0) {
-          assert (tasks(i).leftQs.length == tasks(i).leftQlen)
-          tasks(i).leftQs.foreach(ele => {buf2.putInt(ele.toInt)})
+          //assert (tasks(i).leftQs.length == tasks(i).leftQlen)
+          j = 0
+          while (j < tasks(i).leftQlen) {
+              counter8 = counter8 + 1
+              tmpIntVar = tmpIntVar << 4 | (tasks(i).leftQs(j).toInt & 0x0F)
+              if (counter8 % 8 == 0) buf1.putInt(tmpIntVar)
+              j = j + 1
+          }
+          //tasks(i).leftQs.foreach(ele => {buf1.putInt(ele.toInt)})
         }
         if (tasks(i).rightQlen > 0) {
-          assert (tasks(i).rightQs.length == tasks(i).rightQlen)
-          tasks(i).rightQs.foreach(ele => {buf2.putInt(ele.toInt)})
+          //assert (tasks(i).rightQs.length == tasks(i).rightQlen)
+          j = 0
+          while (j < tasks(i).rightQlen) {
+              counter8 = counter8 + 1
+              tmpIntVar = tmpIntVar << 4 | (tasks(i).rightQs(j).toInt & 0x0F)
+              if (counter8 % 8 == 0) buf1.putInt(tmpIntVar)
+              j = j + 1
+          }
+          //tasks(i).rightQs.foreach(ele => {buf1.putInt(ele.toInt)})
         }
         if (tasks(i).leftRlen > 0) {
-          assert (tasks(i).leftRs.length == tasks(i).leftRlen)
-          tasks(i).leftRs.foreach(ele => {buf2.putInt(ele.toInt)})
+          //assert (tasks(i).leftRs.length == tasks(i).leftRlen)
+          j = 0
+          while (j < tasks(i).leftRlen) {
+              counter8 = counter8 + 1
+              tmpIntVar = tmpIntVar << 4 | (tasks(i).leftRs(j).toInt & 0x0F)
+              if (counter8 % 8 == 0) buf1.putInt(tmpIntVar)
+              j = j + 1
+          }
+          //tasks(i).leftRs.foreach(ele => {buf1.putInt(ele.toInt)})
         }
         if (tasks(i).rightRlen > 0) {
-          assert (tasks(i).rightRs.length == tasks(i).rightRlen)
-          tasks(i).rightRs.foreach(ele => {buf2.putInt(ele.toInt)})
+          //assert (tasks(i).rightRs.length == tasks(i).rightRlen)
+          j = 0
+          while (j < tasks(i).rightRlen) {
+              counter8 = counter8 + 1
+              tmpIntVar = tmpIntVar << 4 | (tasks(i).rightRs(j).toInt & 0x0F)
+              if (counter8 % 8 == 0) buf1.putInt(tmpIntVar)
+              j = j + 1
+          }
+          //tasks(i).rightRs.foreach(ele => {buf1.putInt(ele.toInt)})
         }
+        if (counter8 % 8 != 0) {
+          while (counter8 % 8 != 0) {
+              tmpIntVar = tmpIntVar << 4
+              counter8 = counter8 + 1
+          }
+          buf1.putInt(tmpIntVar)
+	}
         i = i + 1
       }
-	    //writer.println("Start writing queries and targets");
-      conn.send(taskPos)
-      conn.send(buf2);
 
-      //writer.println("data transferred");
-      //timer1.report( );
+      val conn = new Connector2FPGA("127.0.0.1", 5555);
+      conn.buildConnection( 1 );
+      conn.send(taskPos*4)
+      conn.send(buf1, taskPos*4);
 
       val bufRet = conn.receive_short(taskNum * retValues)
       i = 0
@@ -231,7 +254,6 @@ object MemChainToAlignBatched {
 
       conn.closeConnection();
 
-      //writer.close();
   }
 
   /**
@@ -286,7 +308,9 @@ object MemChainToAlignBatched {
                            numOfReads: Int,
                            preResultsOfSW: Array[Array[SWPreResultType]],
                            chainsFilteredArray: Array[Array[MemChainType]],
-                           regArrays: Array[MemAlnRegArrayType]
+                           regArrays: Array[MemAlnRegArrayType],
+			   useFPGA: Boolean,
+			   threshold: Int
                           ){
 
     // The coordinate for each read: (chain No., seed No.)
@@ -464,37 +488,27 @@ object MemChainToAlignBatched {
 	}
 	i = i+1
       }
+
       if (useFPGA == true) {
-        if (taskIdx != 0)
-          runOnFPGA(taskIdx, fpgaExtTasks, fpgaExtResults)
-        //verification
-        //i = 0
-        //var verifiedRes: ExtRet = null
-        //while (i < taskIdx) {
-        //  fpgaExtTasks(i).display
-        //  fpgaExtResults(i).display
-        //  verifiedRes = extension(fpgaExtTasks(i))
-        //  verifiedRes.display
-        //  assert (verifiedRes.qBeg == fpgaExtResults(i).qBeg)
-        //  assert (verifiedRes.rBeg == fpgaExtResults(i).rBeg)
-        //  assert (verifiedRes.qEnd == fpgaExtResults(i).qEnd)
-        //  assert (verifiedRes.rEnd == fpgaExtResults(i).rEnd)
-        //  assert (verifiedRes.score == fpgaExtResults(i).score)
-        //  assert (verifiedRes.trueScore == fpgaExtResults(i).trueScore)
-        //  assert (verifiedRes.width == fpgaExtResults(i).width)
-        //  assert (verifiedRes.idx == fpgaExtResults(i).idx)
-        //  i += 1
-        //}
+        if (taskIdx >= threshold) {
+          val ret = runOnFPGA(taskIdx, numOfReads, fpgaExtTasks, fpgaExtResults)
+	}
+	else {
+          i = 0;
+          while (i < taskIdx) {
+              fpgaExtResults(i) = extension(fpgaExtTasks(i))
+              i = i+1
+          }
+	}
       }
       else {
         i = 0;
         while (i < taskIdx) {
-            fpgaExtTasks(i).display()
             fpgaExtResults(i) = extension(fpgaExtTasks(i))
-            fpgaExtResults(i).display()
             i = i+1
         }
       }
+
       i = 0;
       while (i < taskIdx) {
         var tmpIdx = fpgaExtResults(i).idx
