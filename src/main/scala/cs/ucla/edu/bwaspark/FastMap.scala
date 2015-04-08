@@ -49,14 +49,14 @@ object FastMap {
     val fastqHDFSInputPath = bwamemArgs.fastqHDFSInputPath     // the raw read file stored in HDFS
     val isPairEnd = bwamemArgs.isPairEnd                       // perform pair-end or single-end mapping
     val fastqInputFolderNum = bwamemArgs.fastqInputFolderNum   // the number of folders generated in the HDFS for the raw reads
-    val batchFolderNum = bwamemArgs.batchedFolderNum             // the number of raw read folders in a batch to be processed
+    val batchFolderNum = bwamemArgs.batchedFolderNum           // the number of raw read folders in a batch to be processed
     val isPSWBatched = bwamemArgs.isPSWBatched                 // whether the pair-end Smith Waterman is performed in a batched way
     val subBatchSize = bwamemArgs.subBatchSize                 // the number of reads to be processed in a subbatch
     val isPSWJNI = bwamemArgs.isPSWJNI                         // whether the native JNI library is called for better performance
     val jniLibPath = bwamemArgs.jniLibPath                     // the JNI library path in the local machine
     val outputChoice = bwamemArgs.outputChoice                 // the output format choice
     val outputPath = bwamemArgs.outputPath                     // the output path in the local or distributed file system
-    val readGroupString = bwamemArgs.headerLine        // complete read group header line: Example: @RG\tID:foo\tSM:bar
+    val readGroupString = bwamemArgs.headerLine                // complete read group header line: Example: @RG\tID:foo\tSM:bar
 
     val samHeader = new SAMHeader
     var adamHeader = new SequenceDictionary
@@ -98,12 +98,9 @@ object FastMap {
     if(isPairEnd) {
       bwaMemOpt.flag |= MEM_F_PE
       if(outputChoice == SAM_OUT_LOCAL || outputChoice == SAM_OUT_DFS)
-        memPairEndMapping(sc, fastaLocalInputPath, fastqHDFSInputPath, fastqInputFolderNum, batchFolderNum, bwaMemOpt, bwaIdx, 
-                          isPSWBatched, subBatchSize, isPSWJNI, jniLibPath, outputChoice, outputPath, samHeader)
+        memPairEndMapping(sc, bwamemArgs, bwaMemOpt, bwaIdx, samHeader)
       else if(outputChoice == ADAM_OUT)
-        memPairEndMapping(sc, fastaLocalInputPath, fastqHDFSInputPath, fastqInputFolderNum, batchFolderNum, bwaMemOpt, bwaIdx, 
-                          isPSWBatched, subBatchSize, isPSWJNI, jniLibPath, outputChoice, outputPath, samHeader, seqDict, readGroup)
-        
+        memPairEndMapping(sc, bwamemArgs, bwaMemOpt, bwaIdx, samHeader, seqDict, readGroup)       
     }
     // single-end read mapping
     else {
@@ -261,26 +258,32 @@ object FastMap {
     *  memPairEndMapping: the main function to perform pair-end read mapping
     *
     *  @param sc the spark context object
-    *  @param fastaLocalInputPath the local BWA index files (bns, pac, and so on)
-    *  @param fastqHDFSInputPath the raw read file stored in HDFS
-    *  @param fastqInputFolderNum the number of folders generated in the HDFS for the raw reads
-    *  @param batchFolderNum the number of raw read folders in a batch to be processed
+    *  @param bwamemArgs the arguments of CS-BWAMEM
     *  @param bwaMemOpt the MemOptType object
     *  @param bwaIdx the BWAIdxType object
-    *  @param isPSWBatched whether the pair-end Smith Waterman is performed in a batched way
-    *  @param subBatchSize the number of reads to be processed in a subbatch
-    *  @param isPSWJNI whether the native JNI library is called for better performance
-    *  @param jniLibPath the JNI library path in the local machine
-    *  @param outputChoice the output format choice
-    *  @param outputPath the output path in the local or distributed file system
     *  @param samHeader the SAM header file used for writing SAM output file
     *  @param seqDict (optional) the sequences (chromosome) dictionary: used for ADAM format output
     *  @param readGroup (optional) the read group: used for ADAM format output
     */
-  private def memPairEndMapping(sc: SparkContext, fastaLocalInputPath: String, fastqHDFSInputPath: String, fastqInputFolderNum: Int, batchFolderNum: Int, 
-                                bwaMemOpt: MemOptType, bwaIdx: BWAIdxType, isPSWBatched: Boolean, subBatchSize: Int, isPSWJNI: Boolean, jniLibPath: String, 
-                                outputChoice: Int, outputPath: String, samHeader: SAMHeader, seqDict: SequenceDictionary = null, readGroup: RecordGroup = null) 
+  private def memPairEndMapping(sc: SparkContext, bwamemArgs: BWAMEMCommand, bwaMemOpt: MemOptType, bwaIdx: BWAIdxType, 
+                                samHeader: SAMHeader, seqDict: SequenceDictionary = null, readGroup: RecordGroup = null) 
   {
+    // Get the input arguments
+    val fastaLocalInputPath = bwamemArgs.fastaInputPath        // the local BWA index files (bns, pac, and so on)
+    val fastqHDFSInputPath = bwamemArgs.fastqHDFSInputPath     // the raw read file stored in HDFS
+    val fastqInputFolderNum = bwamemArgs.fastqInputFolderNum   // the number of folders generated in the HDFS for the raw reads
+    val batchFolderNum = bwamemArgs.batchedFolderNum           // the number of raw read folders in a batch to be processed
+    val isPSWBatched = bwamemArgs.isPSWBatched                 // whether the pair-end Smith Waterman is performed in a batched way
+    val subBatchSize = bwamemArgs.subBatchSize                 // the number of reads to be processed in a subbatch
+    val isPSWJNI = bwamemArgs.isPSWJNI                         // whether the native JNI library is called for better performance
+    val jniLibPath = bwamemArgs.jniLibPath                     // the JNI library path in the local machine
+    val outputChoice = bwamemArgs.outputChoice                 // the output format choice
+    val outputPath = bwamemArgs.outputPath                     // the output path in the local or distributed file system
+    val isSWExtBatched = bwamemArgs.isSWExtBatched             // whether the SWExtend is executed in a batched way
+    val swExtBatchSize = bwamemArgs.swExtBatchSize             // the batch size used for used for SWExtend
+    val isFPGAAccSWExtend = bwamemArgs.isFPGAAccSWExtend       // whether the FPGA accelerator is used for accelerating SWExtend
+    val fpgaSWExtThreshold = bwamemArgs.fpgaSWExtThreshold     // the threshold of using FPGA accelerator for SWExtend
+
     // Initialize output writer
     val samWriter = new SAMWriter
     val samHDFSWriter = new SAMHDFSWriter(outputPath)
@@ -333,8 +336,44 @@ object FastMap {
       }
 
       // Worker1 (Map step)
-      println("@Worker1")
-      val reads = pairEndFASTQRDD.map( pairSeq => pairEndBwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, pairSeq) ) 
+      println("@Worker1") 
+      var reads: RDD[PairEndReadType] = null
+
+      // SWExtend() is not processed in a batched way (by default)
+      if(!isSWExtBatched) {
+        reads = pairEndFASTQRDD.map( pairSeq => pairEndBwaMemWorker1(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, null, pairSeq) ) 
+      }
+      // SWExtend() is processed in a batched way. FPGA accelerating may be applied
+      else {
+        def it2ArrayIt(iter: Iterator[PairEndFASTQRecord]): Iterator[Array[PairEndReadType]] = {
+          val batchedDegree = swExtBatchSize
+          var counter = 0
+          var ret = new Vector[PairEndReadType] = scala.collection.immutable.Vector.empty
+          var end1 = new Array[FASTQRecord](batchedDegree)
+          var end2 = new Array[FASTQRecord](batchedDegree)
+          
+          while(iter.hasNext) {
+            end1(counter) = iter.next.seq0
+            end2(counter) = iter.next.seq1
+            counter += 1
+            if(counter == batchedDegree) {
+              ret += pairEndBwaMemWorker1Batched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 
+                                                 null, end1, end2, batchedDegree, isFPGAAccSWExtend, fpgaSWExtThreshold)
+              counter = 0
+            }
+          }
+
+          if(counter != 0) {
+            ret += pairEndBwaMemWorker1Batched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 
+                                               null, end1, end2, counter, isFPGAAccSWExtend, fpgaSWExtThreshold)
+          }
+
+          ret.toArray.iterator
+        }
+
+        reads = pairEndFASTQRDD.mapPartitions(it2ArrayIt).flatMap(s => s)
+      }      
+
       pairEndFASTQRDD.unpersist(true)
       reads.cache
 

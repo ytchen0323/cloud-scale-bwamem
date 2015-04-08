@@ -43,6 +43,14 @@ object BWAMEMSpark {
                                nextOption(map ++ Map('outputPath -> value), tail)
         case "-R" :: value :: tail =>
                                nextOption(map ++ Map('headerLine -> value), tail)
+        case "-isSWExtBatched" :: value :: tail =>
+                               nextOption(map ++ Map('isSWExtBatched -> value.toInt), tail)
+        case "-bSWExtSize" :: value :: tail =>
+                               nextOption(map ++ Map('swExtBatchSize -> value.toInt), tail)
+        case "-FPGAAccSWExt" :: value :: tail =>
+                               nextOption(map ++ Map('isFPGAAccSWExtend -> value.toInt), tail)
+        case "-FPGASWExtThreshold" :: value :: tail =>
+                               nextOption(map ++ Map('FPGASWExtThreshold -> value.toInt), tail)
         case isPairEnd ::  inFASTAPath :: inFASTQPath :: fastqInputFolderNum :: Nil =>  
                                nextOption(map ++ 
                                           Map('isPairEnd -> isPairEnd.toInt) ++ 
@@ -97,6 +105,32 @@ object BWAMEMSpark {
       bwamemArgs.outputPath = options('outputPath).toString
     if(options.get('headerLine) != None)
       bwamemArgs.headerLine = options('headerLine).toString
+    if(options.get('isSWExtBatched) != None) {
+      val isSWExtBatched = options('isSWExtBatched).toString.toInt
+      if(isSWExtBatched == 0)
+        bwamemArgs.isSWExtBatched = false
+      else if(isSWExtBatched == 1)
+        bwamemArgs.isSWExtBatched = true
+      else {
+        println("[Error] Undefined -isSWExtBatched argument" + isSWExtBatched)
+        exit(1)
+      }
+    }
+    if(options.get('swExtBatchSize) != None) 
+      bwamemArgs.swExtBatchSize = options('swExtBatchSize).toString.toInt
+    if(options.get('isFPGAAccSWExtend) != None) {
+      val isFPGAAccSWExtend = options('isFPGAAccSWExtend).toString.toInt
+      if(isFPGAAccSWExtend == 0)
+        bwamemArgs.isFPGAAccSWExtend = false
+      else if(isFPGAAccSWExtend == 1)
+        bwamemArgs.isFPGAAccSWExtend = true
+      else {
+        println("[Error] Undefined -FPGAAccSWExt argument" + isFPGAAccSWExtend)
+        exit(1)
+      }
+    }
+    if(options.get('FPGASWExtThreshold) != None)
+      bwamemArgs.fpgaSWExtThreshold = options('FPGASWExtThreshold).toString.toInt
 
     val isPairEnd = options('isPairEnd).toString.toInt
     if(isPairEnd == 1)
@@ -188,7 +222,7 @@ object BWAMEMSpark {
                       "Optional arguments: \n" +
                       "-bn (optional): the number of lines to be read in one group (batch)\n\n\n" +
                       "Usage 2: use CS-BWAMEM aligner\n" +
-                      "Usage: cs-bwamem [-bfn INT] [-bPSW (0/1)] [-sbatch INT] [-bPSWJNI (0/1)] [-jniPath STRING] [-oType (0/1/2)] [-oPath STRING] [-R STRING] isPairEnd fastaInputPath fastqHDFSInputPath fastqInputFolderNum\n\n" +
+                      "Usage: cs-bwamem [-bfn INT] [-bPSW (0/1)] [-sbatch INT] [-bPSWJNI (0/1)] [-jniPath STRING] [-oType (0/1/2)] [-oPath STRING] [-R STRING] [-isSWExtBatched (0/1)] [-bSWExtSize INT] [-FPGAAcc (0/1)] isPairEnd fastaInputPath fastqHDFSInputPath fastqInputFolderNum\n\n" +
                       "Required arguments (in the following order): \n" +
                       "isPairEnd: perform pair-end (1) or single-end (0) mapping\n" +
                       "fastaInputPath: the path of (local) BWA index files (bns, pac, and so on)\n" +
@@ -206,7 +240,16 @@ object BWAMEMSpark {
                       "                   2: ADAM format output in the distributed file system\n" +
                       "                   3: SAM format output in the distributed file system\n" +
                       "-oPath (optional): the output path; users need to provide correct path in the local or distributed file system\n\n" +
-                      "-R (should be added in normal case): Complete read group header line. Example: @RG\tID:foo\tSM:bar\n\n\n" +
+                      "-R (should be added for common case): Complete read group header line. Example: @RG\tID:foo\tSM:bar\n\n" +
+                      "-isSWExtBatched (optional): whether the SWExtend is executed in a batched way\n" +
+                      "                   0: No (default)\n" +
+                      "                   1: Yes\n\n" +
+                      "-bSWExtSize (optional): the batch size used for SWExtend\n\n" +
+                      "-FPGAAccSWExt (optional): whether the FPGA accelerator is used for accelerating SWExtend\n" +
+                      "                   0: No (default)\n" +
+                      "                   1: Yes\n\n" +
+                      "-FPGASWExtThreshold (optional): the threshold of using FPGA accelerator for SWExtend.\n" + 
+                      "    If the nubmer of seed in one step is larger than this threshold, FPGA acceleration will be applied. Otherwise, CPU is used for computation.\n\n\n" +
                       "Usage 3: merge the output ADAM folder pieces and save as a new ADAM file in HDFS\n" +
                       "Usage: merge adamHDFSRootInputPath adamHDFSOutputPath\n\n\n" +
                       "Usage 4: sort the output ADAM folder pieces and save as a new ADAM file in HDFS\n" +
