@@ -7,6 +7,7 @@ import org.apache.spark.rdd.RDD
 
 import cs.ucla.edu.bwaspark.datatype._
 import cs.ucla.edu.bwaspark.worker1.BWAMemWorker1._
+import cs.ucla.edu.bwaspark.worker1.BWAMemWorker1Batched._
 import cs.ucla.edu.bwaspark.worker2.BWAMemWorker2._
 import cs.ucla.edu.bwaspark.worker2.MemSamPe._
 import cs.ucla.edu.bwaspark.sam.SAMHeader
@@ -345,10 +346,10 @@ object FastMap {
       }
       // SWExtend() is processed in a batched way. FPGA accelerating may be applied
       else {
-        def it2ArrayIt(iter: Iterator[PairEndFASTQRecord]): Iterator[Array[PairEndReadType]] = {
+        def it2ArrayIt_W1(iter: Iterator[PairEndFASTQRecord]): Iterator[Array[PairEndReadType]] = {
           val batchedDegree = swExtBatchSize
           var counter = 0
-          var ret = new Vector[PairEndReadType] = scala.collection.immutable.Vector.empty
+          var ret: Vector[Array[PairEndReadType]] = scala.collection.immutable.Vector.empty
           var end1 = new Array[FASTQRecord](batchedDegree)
           var end2 = new Array[FASTQRecord](batchedDegree)
           
@@ -357,21 +358,21 @@ object FastMap {
             end2(counter) = iter.next.seq1
             counter += 1
             if(counter == batchedDegree) {
-              ret += pairEndBwaMemWorker1Batched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 
+              ret = ret :+ pairEndBwaMemWorker1Batched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 
                                                  null, end1, end2, batchedDegree, isFPGAAccSWExtend, fpgaSWExtThreshold)
               counter = 0
             }
           }
 
           if(counter != 0) {
-            ret += pairEndBwaMemWorker1Batched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 
+            ret = ret :+ pairEndBwaMemWorker1Batched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 
                                                null, end1, end2, counter, isFPGAAccSWExtend, fpgaSWExtThreshold)
           }
 
           ret.toArray.iterator
         }
 
-        reads = pairEndFASTQRDD.mapPartitions(it2ArrayIt).flatMap(s => s)
+        reads = pairEndFASTQRDD.mapPartitions(it2ArrayIt_W1).flatMap(s => s)
       }      
 
       pairEndFASTQRDD.unpersist(true)

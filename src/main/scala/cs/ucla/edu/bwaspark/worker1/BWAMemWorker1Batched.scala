@@ -70,7 +70,7 @@ object BWAMemWorker1Batched {
 
       //first & second step: chaining and filtering
       val chainsFilteredArray = new Array[Array[MemChainType]](numOfReads)
-      var i = 0;
+      i = 0;
       while (i < numOfReads) {
         chainsFilteredArray(i) = memChainFilter(opt, generateChains(opt, bwt, bns.l_pac, lenArray(i), readArray(i))) 
         i = i+1;
@@ -153,8 +153,8 @@ object BWAMemWorker1Batched {
 			   threshold: Int //the batch threshold to run on FPGA
                           ): Array[PairEndReadType] = { //all possible alignment  
  
-    val readArray0 = bwaMemWorker1(opt, bwt, bns, pac, pes, seqArray0, numOfReads, runOnFPGA, threshold)
-    val readArray1 = bwaMemWorker1(opt, bwt, bns, pac, pes, seqArray1, numOfReads, runOnFPGA, threshold)
+    val readArray0 = bwaMemWorker1Batched(opt, bwt, bns, pac, pes, seqArray0, numOfReads, runOnFPGA, threshold)
+    val readArray1 = bwaMemWorker1Batched(opt, bwt, bns, pac, pes, seqArray1, numOfReads, runOnFPGA, threshold)
     var pairEndReadArray = new Array[PairEndReadType](numOfReads)
     var i = 0
     while (i < numOfReads) {

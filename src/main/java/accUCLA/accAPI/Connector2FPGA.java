@@ -45,6 +45,7 @@ public class Connector2FPGA {
 
     public void send( int i ) throws IOException
     {
+	//System.out.println ("ACCAPI: send " + i);
         //o2.writeInt(big2LittleEndian.Int(i));
         o2.write(ByteBuffer.allocate(4).order(ByteOrder.nativeOrder()).putInt(i).array(),0,4);
         o2.flush();
@@ -60,6 +61,15 @@ public class Connector2FPGA {
         for( int start = 0; start < array.length; start += packet_size )
         {
             if( start + packet_size > array.length ) packet_size = array.length - start;
+            o2.write( array, start, packet_size );
+        }
+    }
+    public void send_large_array( byte[] array, int length ) throws IOException
+    {
+        int packet_size = 256*1024;
+        for( int start = 0; start < length; start += packet_size )
+        {
+            if( start + packet_size > length ) packet_size = length - start;
             o2.write( array, start, packet_size );
         }
     }
@@ -128,6 +138,9 @@ public class Connector2FPGA {
     }
     public void send( ByteBuffer buf ) throws IOException {
 	send_large_array(buf.array());
+    }
+    public void send( ByteBuffer buf, int length ) throws IOException {
+	send_large_array(buf.array(), length);
     }
     public int receive( ) throws IOException
     {
