@@ -24,92 +24,178 @@ import java.net.ServerSocket
 // Used for read test input data
 import java.io.{FileReader, BufferedReader}
 
+// JNI function for SWExtend
+import cs.ucla.edu.bwaspark.jni.SWExtendFPGAJNI
+
+
 object MemChainToAlignBatched {
   val MAX_BAND_TRY = 2    
   val MARKED = -2
+  // Use for FPGA Kernel
+  val commonSize = 32
+  val indivSize = 32
+  val retValues = 8
+  val FPGA_RET_PARAM_NUM = 4
 
-  /**
-    *  Read class (testing use)
-    */
-  class ReadChain(chains_i: MutableList[MemChainType], seq_i: Array[Byte]) {
-    var chains: MutableList[MemChainType] = chains_i
-    var seq: Array[Byte] = seq_i
-  }
+  //Run DPs on FPGA
+  def runOnFPGAJNI(taskNum: Int, //number of tasks
+                   tasks: Array[ExtParam], // task array
+                   results: Array[ExtRet] // result array
+                  ) {
+    // *****   PROFILING    *******
+    //var profilingRet = new Array[Long](3);
 
-  /**
-    *  Member variable of all reads (testing use)
-    */ 
-  var testReadChains: MutableList[ReadChain] = new MutableList
-  
-  /**
-    *  Read the test chain data generated from bwa-0.7.8 (C version) (testing use)
-    *
-    *  @param fileName the test data file name
-    */
-  def readTestData(fileName: String) {
-    val reader = new BufferedReader(new FileReader(fileName))
+    // *****   PROFILING    *******
+    //val FPGARoutineStartTime = System.nanoTime
 
-    var line = reader.readLine
-    var chains: MutableList[MemChainType] = new MutableList
-    var chainPos: Long = 0
-    var seeds: MutableList[MemSeedType] = new MutableList
-    var seq: Array[Byte] = new Array[Byte](101)  // assume the size to be 101 (not true for all kinds of reads)
-
-    while(line != null) {
-      val lineFields = line.split(" ")      
-
-      // Find a sequence
-      if(lineFields(0) == "Sequence") {
-        chains = new MutableList
-        seq = lineFields(2).getBytes
-        seq = seq.map(s => (s - 48).toByte) // ASCII => Byte(Int)
-      }
-      // Find a chain
-      else if(lineFields(0) == "Chain") {
-        seeds = new MutableList
-        chainPos = lineFields(1).toLong
-      }
-      // Fina a seed
-      else if(lineFields(0) == "Seed") {
-        seeds += (new MemSeedType(lineFields(1).toLong, lineFields(2).toInt, lineFields(3).toInt))
-      }
-      // append the current list
-      else if(lineFields(0) == "ChainEnd") {
-        val cur_seeds = seeds
-        chains += (new MemChainType(chainPos, cur_seeds))
-      }
-      // append the current list
-      else if(lineFields(0) == "SequenceEnd") {
-        val cur_chains = chains
-        val cur_seq = seq 
-        testReadChains += (new ReadChain(cur_chains, seq))
-      }
-
-      line = reader.readLine
+    def int2ByteArray(arr: Array[Byte], idx: Int, num: Int): Int = {
+      arr(idx) = (num & 0xff).toByte
+      arr(idx+1) = ((num >> 8) & 0xff).toByte
+      arr(idx+2) = ((num >> 16) & 0xff).toByte
+      arr(idx+3) = ((num >> 24) & 0xff).toByte
+      idx+4
+    }
+    def short2ByteArray(arr: Array[Byte], idx: Int, num: Short): Int = {
+      arr(idx) = (num & 0xff).toByte
+      arr(idx+1) = ((num >> 8) & 0xff).toByte
+      idx+2
     }
 
-  }
+    val buf1Len = commonSize + indivSize*taskNum
+    val buf1 = new Array[Byte](buf1Len)
+    buf1(0) = (tasks(0).oDel.toByte)
+    buf1(1) = (tasks(0).eDel.toByte)
+    buf1(2) = (tasks(0).oIns.toByte)
+    buf1(3) = (tasks(0).eIns.toByte)
+    buf1(4) = (tasks(0).penClip5.toByte)
+    buf1(5) = (tasks(0).penClip3.toByte)
+    buf1(6) = (tasks(0).w.toByte)
+    int2ByteArray(buf1, 8, taskNum) //8,9,10,11
 
+    var i = 0
+    var leftMaxIns = 0
+    var leftMaxDel = 0
+    var rightMaxIns = 0
+    var rightMaxDel = 0
+    var taskPos = buf1Len >> 2
+    var buf1Idx = 32
 
-  /**
-    *  Print all the chains (and seeds) from all input reads 
-    *  (Only for testing use)
-    */
-  def printAllReads() {
-    def printChains(chains: MutableList[MemChainType]) {
-      println("Sequence");
-      def printSeeds(seeds: MutableList[MemSeedType]) {
-        seeds.foreach(s => println("Seed " + s.rBeg + " " + s.qBeg + " " + s.len))
+    while (i < taskNum) {
+      buf1Idx = short2ByteArray(buf1, buf1Idx, tasks(i).leftQlen.toShort)
+      buf1Idx = short2ByteArray(buf1, buf1Idx, tasks(i).leftRlen.toShort)
+      buf1Idx = short2ByteArray(buf1, buf1Idx, tasks(i).rightQlen.toShort)
+      buf1Idx = short2ByteArray(buf1, buf1Idx, tasks(i).rightRlen.toShort)
+      buf1Idx = int2ByteArray(buf1, buf1Idx, taskPos)
+      taskPos += ((((tasks(i).leftQlen + tasks(i).leftRlen + tasks(i).rightQlen + tasks(i).rightRlen)+1)/2)+3)/4
+      buf1Idx = short2ByteArray(buf1, buf1Idx, tasks(i).regScore.toShort)
+      buf1Idx = short2ByteArray(buf1, buf1Idx, tasks(i).qBeg.toShort)
+      buf1Idx = short2ByteArray(buf1, buf1Idx, tasks(i).h0.toShort)
+      buf1Idx = short2ByteArray(buf1, buf1Idx, tasks(i).idx.toShort)
+      leftMaxIns = ((tasks(i).leftQlen * tasks(i).mat.max + tasks(i).penClip5 - tasks(i).oIns).toDouble / tasks(i).eIns + 1).toInt
+      leftMaxDel = ((tasks(i).leftQlen * tasks(i).mat.max + tasks(i).penClip5 - tasks(i).oDel).toDouble / tasks(i).eDel + 1).toInt
+      rightMaxIns = ((tasks(i).rightQlen * tasks(i).mat.max + tasks(i).penClip3 - tasks(i).oIns).toDouble / tasks(i).eIns + 1).toInt
+      rightMaxDel = ((tasks(i).rightQlen * tasks(i).mat.max + tasks(i).penClip3 - tasks(i).oDel).toDouble / tasks(i).eDel + 1).toInt
+      buf1Idx = short2ByteArray(buf1, buf1Idx, leftMaxIns.toShort)
+      buf1Idx = short2ByteArray(buf1, buf1Idx, leftMaxDel.toShort)
+      buf1Idx = short2ByteArray(buf1, buf1Idx, rightMaxIns.toShort)
+      buf1Idx = short2ByteArray(buf1, buf1Idx, rightMaxDel.toShort)
+      buf1Idx = int2ByteArray(buf1, buf1Idx, tasks(i).idx)
+
+      i = i+1
+    }
+
+    val buf2 = new Array[Byte]((taskPos<<2)-buf1Len)
+    var buf2Idx = 0
+    i = 0
+    var j = 0
+    var tmpIntVar = 0
+    var counter8 = 0
+    while (i < taskNum) {
+      if (tasks(i).leftQlen > 0) {
+        j = 0
+        while (j < tasks(i).leftQlen) {
+            counter8 = counter8 + 1
+            tmpIntVar = tmpIntVar << 4 | (tasks(i).leftQs(j).toInt & 0x0F)
+            if (counter8 % 8 == 0) buf2Idx = int2ByteArray(buf2, buf2Idx, tmpIntVar)
+            j = j + 1
+        }
       }
+      if (tasks(i).rightQlen > 0) {
+        j = 0
+        while (j < tasks(i).rightQlen) {
+            counter8 = counter8 + 1
+            tmpIntVar = tmpIntVar << 4 | (tasks(i).rightQs(j).toInt & 0x0F)
+            if (counter8 % 8 == 0) buf2Idx = int2ByteArray(buf2, buf2Idx, tmpIntVar)
+            j = j + 1
+        }
+      }
+      if (tasks(i).leftRlen > 0) {
+        j = 0
+        while (j < tasks(i).leftRlen) {
+            counter8 = counter8 + 1
+            tmpIntVar = tmpIntVar << 4 | (tasks(i).leftRs(j).toInt & 0x0F)
+            if (counter8 % 8 == 0) buf2Idx = int2ByteArray(buf2, buf2Idx, tmpIntVar)
+            j = j + 1
+        }
+      }
+      if (tasks(i).rightRlen > 0) {
+        j = 0
+        while (j < tasks(i).rightRlen) {
+            counter8 = counter8 + 1
+            tmpIntVar = tmpIntVar << 4 | (tasks(i).rightRs(j).toInt & 0x0F)
+            if (counter8 % 8 == 0) buf2Idx = int2ByteArray(buf2, buf2Idx, tmpIntVar)
+            j = j + 1
+        }
+      }
+      if (counter8 % 8 != 0) {
+        while (counter8 % 8 != 0) {
+            tmpIntVar = tmpIntVar << 4
+            counter8 = counter8 + 1
+        }
+        buf2Idx = int2ByteArray(buf2, buf2Idx, tmpIntVar)
+      }
+      i = i + 1
+    }
+
+    // *****   PROFILING    *******
+    //val JavaHostSendReqTime = System.nanoTime
+    //profilingRet(0) = JavaHostSendReqTime - FPGARoutineStartTime
+
+    val buf2Host = Array.concat(buf1, buf2)
+    //assert(buf2Host.size == (taskPos * 4))
+
+    // JNI
+    val jni = new SWExtendFPGAJNI
+    val bufRet = jni.swExtendFPGAJNI(taskNum * FPGA_RET_PARAM_NUM * 2, buf2Host)  // taskNum * FPGA_RET_PARAM_NUM * 2 == NUM of short integers to be returned
+
+    // *****   PROFILING    *******
+    //val JavaHostReceiveReqTime = System.nanoTime
+    //profilingRet(1) = JavaHostReceiveReqTime - JavaHostSendReqTime
+
+    i = 0
+    while (i < taskNum) {
+      if (results(i) == null) results(i) = new ExtRet
+      results(i).idx = tasks(i).idx
+      results(i).qBeg = bufRet(FPGA_RET_PARAM_NUM * 2 * i)
+      results(i).qEnd = bufRet(1 + FPGA_RET_PARAM_NUM * 2 * i)
+      results(i).rBeg = bufRet(2 + FPGA_RET_PARAM_NUM * 2 * i)
+      results(i).rEnd = bufRet(3 + FPGA_RET_PARAM_NUM * 2 * i)
+      results(i).score = bufRet(4 + FPGA_RET_PARAM_NUM * 2 * i)
+      results(i).trueScore = bufRet(5 + FPGA_RET_PARAM_NUM * 2 * i)
+      results(i).width = bufRet(6 + FPGA_RET_PARAM_NUM * 2 * i)
+      i += 1
+    }
+
+    //conn.closeConnection(); 
+
+    // *****   PROFILING    *******
+    //val FPGARoutineEndTime = System.nanoTime
+    //profilingRet(2) = FPGARoutineEndTime - JavaHostReceiveReqTime
     
-      chains.map(p => {
-        println("Chain " + p.pos + " " + p.seeds.length)
-        printSeeds(p.seeds)
-                      } )
-    }
-
-    testReadChains.foreach(r => printChains(r.chains))
+    // PROFILING return
+    //profilingRet
   }
+
 
   //Run DPs on FPGA
   def runOnFPGA(taskNum: Int, //number of tasks
@@ -118,9 +204,6 @@ object MemChainToAlignBatched {
                 results: Array[ExtRet] // result array
                 ) {
       //Sizes of Kernel Components
-      val commonSize = 32
-      val indivSize = 32
-      val retValues = 8
       val DATA_SIZE = TOTAL_TASK_NUM * 256
       val RESULT_SIZE = TOTAL_TASK_NUM * 16
 
@@ -827,6 +910,90 @@ object MemChainToAlignBatched {
     }
 
     seedcov
+  }
+
+
+  /**
+    *  Read class (testing use)
+    */
+  class ReadChain(chains_i: MutableList[MemChainType], seq_i: Array[Byte]) {
+    var chains: MutableList[MemChainType] = chains_i
+    var seq: Array[Byte] = seq_i
+  }
+
+  /**
+    *  Member variable of all reads (testing use)
+    */ 
+  var testReadChains: MutableList[ReadChain] = new MutableList
+  
+  /**
+    *  Read the test chain data generated from bwa-0.7.8 (C version) (testing use)
+    *
+    *  @param fileName the test data file name
+    */
+  def readTestData(fileName: String) {
+    val reader = new BufferedReader(new FileReader(fileName))
+
+    var line = reader.readLine
+    var chains: MutableList[MemChainType] = new MutableList
+    var chainPos: Long = 0
+    var seeds: MutableList[MemSeedType] = new MutableList
+    var seq: Array[Byte] = new Array[Byte](101)  // assume the size to be 101 (not true for all kinds of reads)
+
+    while(line != null) {
+      val lineFields = line.split(" ")      
+
+      // Find a sequence
+      if(lineFields(0) == "Sequence") {
+        chains = new MutableList
+        seq = lineFields(2).getBytes
+        seq = seq.map(s => (s - 48).toByte) // ASCII => Byte(Int)
+      }
+      // Find a chain
+      else if(lineFields(0) == "Chain") {
+        seeds = new MutableList
+        chainPos = lineFields(1).toLong
+      }
+      // Fina a seed
+      else if(lineFields(0) == "Seed") {
+        seeds += (new MemSeedType(lineFields(1).toLong, lineFields(2).toInt, lineFields(3).toInt))
+      }
+      // append the current list
+      else if(lineFields(0) == "ChainEnd") {
+        val cur_seeds = seeds
+        chains += (new MemChainType(chainPos, cur_seeds))
+      }
+      // append the current list
+      else if(lineFields(0) == "SequenceEnd") {
+        val cur_chains = chains
+        val cur_seq = seq 
+        testReadChains += (new ReadChain(cur_chains, seq))
+      }
+
+      line = reader.readLine
+    }
+
+  }
+
+
+  /**
+    *  Print all the chains (and seeds) from all input reads 
+    *  (Only for testing use)
+    */
+  def printAllReads() {
+    def printChains(chains: MutableList[MemChainType]) {
+      println("Sequence");
+      def printSeeds(seeds: MutableList[MemSeedType]) {
+        seeds.foreach(s => println("Seed " + s.rBeg + " " + s.qBeg + " " + s.len))
+      }
+    
+      chains.map(p => {
+        println("Chain " + p.pos + " " + p.seeds.length)
+        printSeeds(p.seeds)
+                      } )
+    }
+
+    testReadChains.foreach(r => printChains(r.chains))
   }
 
 }

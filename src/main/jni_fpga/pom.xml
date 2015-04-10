@@ -1,0 +1,97 @@
+<project>
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>cs.ucla.edu</groupId>
+  <artifactId>jniSWExtend</artifactId>
+  <version>0.1.0</version>
+  <name>JNI Smith-Waterman Extend on FPGA</name>
+    
+  <packaging>so</packaging>
+
+  <dependencies>
+    <dependency>
+      <groupId>cs.ucla.edu</groupId>
+      <artifactId>cloud-scale-bwamem</artifactId>
+      <version>0.1.0</version>
+      <type>jar</type>
+      <scope>system</scope>
+      <systemPath>/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/cloud-scale-bwamem-0.1.0-assembly.jar</systemPath>
+    </dependency>   
+  </dependencies>
+  
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <source>1.6</source>
+          <target>1.6</target>
+        </configuration>
+      </plugin>     
+        
+      <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>native-maven-plugin</artifactId>
+          <extensions>true</extensions>
+              <configuration>
+                  <!--  trigger javah -->          
+                  <javahOS>linux</javahOS>
+          
+                  <compilerProvider>generic-classic</compilerProvider>
+                  <compilerExecutable>gcc</compilerExecutable>
+                    
+                  <linkerExecutable>gcc</linkerExecutable>
+                      <sources>
+                          <source>
+                              <directory>./</directory>
+                              <fileNames>
+                                  <fileName>sw_extend_fpga.c</fileName>
+                              </fileNames>
+                          </source>
+                      </sources>
+                    
+                      <compilerStartOptions>
+                          <compilerStartOption>-s -fPIC -O2</compilerStartOption>
+                      </compilerStartOptions>
+
+                      <linkerStartOptions>
+                          <linkerStartOption>-shared -lrt</linkerStartOption>
+                      </linkerStartOptions>
+
+              </configuration>
+                
+          <executions>
+              <execution>
+              <id>javah</id>
+              <phase>generate-sources</phase>
+              <configuration>
+                  <javahOS>linux</javahOS>
+                  <javahProvider>default</javahProvider>
+                  <!--javahOutputDirectory>${project.build.directory}/custom-javah</javahOutputDirectory-->
+                  <!--workingDirectory>${basedir}</workingDirectory-->
+                  <javahOutputDirectory>../../../target/custom-javah</javahOutputDirectory>
+                  <workingDirectory>../../../target</workingDirectory>
+                  <javahOutputFileName>jni_sw_extend.h</javahOutputFileName>
+                  <javahClassNames>
+                      <javahClassName>cs.ucla.edu.bwaspark.jni.SWExtendFPGAJNI</javahClassName>
+                  </javahClassNames>
+              </configuration>
+              <goals>
+                  <goal>javah</goal>
+              </goals>
+              </execution>
+          </executions>       
+                
+      </plugin>
+    </plugins>
+  </build>
+  <profiles>
+      <profile>
+          <id>otherOutputDir</id>
+          <build>
+              <directory>../../../target</directory>
+          </build>
+      </profile>
+  </profiles>
+</project>
