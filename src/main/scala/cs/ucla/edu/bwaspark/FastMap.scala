@@ -309,6 +309,11 @@ object FastMap {
     val batchedReadNum = rddTmp.count
     rddTmp.unpersist(true)
 
+    // *****   PROFILING    *******
+    var worker1Time: Long = 0
+    var calMetricsTime: Long = 0
+    var worker2Time: Long = 0
+
     var numProcessed: Long = 0
     // Process the reads in a batched fashion
     var i: Int = 0
@@ -337,6 +342,9 @@ object FastMap {
       }
 
       // Worker1 (Map step)
+      // *****   PROFILING    *******
+      val startTime = System.currentTimeMillis
+
       println("@Worker1") 
       var reads: RDD[PairEndReadType] = null
 
@@ -354,8 +362,9 @@ object FastMap {
           var end2 = new Array[FASTQRecord](batchedDegree)
           
           while(iter.hasNext) {
-            end1(counter) = iter.next.seq0
-            end2(counter) = iter.next.seq1
+            val pairEnd = iter.next
+            end1(counter) = pairEnd.seq0
+            end2(counter) = pairEnd.seq1
             counter += 1
             if(counter == batchedDegree) {
               ret = ret :+ pairEndBwaMemWorker1Batched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 
@@ -381,7 +390,16 @@ object FastMap {
       // MemPeStat (Reduce step)
       val peStatPrepRDD = reads.map( pairSeq => memPeStatPrep(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns.l_pac, pairSeq) )
       val peStatPrepArray = peStatPrepRDD.collect
+
+      // *****   PROFILING    *******
+      val worker1EndTime = System.currentTimeMillis
+      worker1Time += (worker1EndTime - startTime)
+
       memPeStatCompute(bwaMemOptGlobal.value, peStatPrepArray, pes)
+
+      // *****   PROFILING    *******
+      val calMetricsEndTime = System.currentTimeMillis
+      calMetricsTime += (calMetricsEndTime - worker1EndTime)
 
       println("@MemPeStat")
       j = 0
@@ -493,12 +511,20 @@ object FastMap {
         numProcessed += count.toLong
       }
  
+      // *****   PROFILING    *******
+      val worker2EndTime = System.currentTimeMillis
+      worker2Time += (worker2EndTime - calMetricsEndTime)
     }
 
     if(outputChoice == SAM_OUT_LOCAL)
       samWriter.close
     else if(outputChoice == SAM_OUT_DFS)
       samHDFSWriter.close
+
+    println("Summary:")
+    println("Worker1 Time: " + worker1Time)
+    println("Calculate Metrics Time: " + calMetricsTime)
+    println("Worker2 Time: " + worker2Time)
   }
 
 } 

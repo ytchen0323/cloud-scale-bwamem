@@ -41,6 +41,7 @@ object BWAMemWorker1Batched {
 			   threshold: Int //the batch threshold to run on FPGA
                            ): Array[ReadType] = { //all possible alignments for all the reads  
 
+    System.load("/curr/genomics_spark/shared_lib/jniSWExtend.so")
     //pre-process: transform A/C/G/T to 0,1,2,3
 
     def locusEncode(locus: Char): Byte = {

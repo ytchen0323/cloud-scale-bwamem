@@ -102,14 +102,14 @@ JNIEXPORT jshortArray JNICALL Java_cs_ucla_edu_bwaspark_jni_SWExtendFPGAJNI_swEx
     printf("Client: attach shared memory: %p\n", shm_addr);
 
   // initialize the flags of shared memory
-  *(shm_addr) = NOT_READY;
-  *(shm_addr + sizeof(int)) = NOT_READY;
+  *((int*)shm_addr) = NOT_READY;
+  *((int*)(shm_addr + sizeof(int))) = NOT_READY;
   
   // put input data
   printf("Client: put input data\n");
   //printf("Shmid: %d, Dataarray size: %d\n", shmid, dataArraySize);
   memcpy(shm_addr + FLAG_NUM * sizeof(int), dataArray, (int) dataArraySize * sizeof(jbyte));
-  *(shm_addr) = DONE;
+  *((int*)shm_addr) = DONE;
   //printf("After memcpy\n", shmid, dataArraySize);
 
   // send a request (shmid) and data array size to the FPGA host thread
@@ -124,7 +124,7 @@ JNIEXPORT jshortArray JNICALL Java_cs_ucla_edu_bwaspark_jni_SWExtendFPGAJNI_swEx
   printf("Poll\n");
   volatile int done = 0;
   while(done == 0) {
-    done = (int) *(shm_addr + sizeof(int));
+    done = (int) *((int*)(shm_addr + sizeof(int)));
     clock_nanosleep(CLOCK_REALTIME, 0, &deadline, NULL);
     //usleep(1);
   }
@@ -135,7 +135,7 @@ JNIEXPORT jshortArray JNICALL Java_cs_ucla_edu_bwaspark_jni_SWExtendFPGAJNI_swEx
   int i;
   jshort* fill = (jshort*) malloc(retTaskNum * sizeof(jshort));
   for(i = 0; i < retTaskNum; i++)
-    fill[i] = (jshort) (*(shm_addr + (FLAG_NUM * 2 + i) * sizeof(short)));
+    fill[i] = *((jshort*)(shm_addr + (FLAG_NUM * 2 + i) * sizeof(jshort)));
 
   // free the shared memory
   shmdt(shm_addr);

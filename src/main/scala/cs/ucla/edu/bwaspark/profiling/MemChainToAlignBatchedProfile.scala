@@ -1,4 +1,4 @@
-package cs.ucla.edu.bwaspark.worker1
+package cs.ucla.edu.bwaspark.profiling
 
 import scala.collection.mutable.MutableList
 
@@ -28,7 +28,7 @@ import java.io.{FileReader, BufferedReader}
 import cs.ucla.edu.bwaspark.jni.SWExtendFPGAJNI
 
 
-object MemChainToAlignBatched {
+object MemChainToAlignBatchedProfile {
   val MAX_BAND_TRY = 2    
   val MARKED = -2
   // Use for FPGA Kernel
@@ -38,15 +38,17 @@ object MemChainToAlignBatched {
   val FPGA_RET_PARAM_NUM = 4
 
   //Run DPs on FPGA
-  def runOnFPGAJNI(taskNum: Int, //number of tasks
+  def runOnFPGAJNIProfile
+                  (taskNum: Int, //number of tasks
                    tasks: Array[ExtParam], // task array
                    results: Array[ExtRet] // result array
-                  ) {
-    // *****   PROFILING    *******
-    //var profilingRet = new Array[Long](3);
+                  ): Array[Long] = {
 
     // *****   PROFILING    *******
-    //val FPGARoutineStartTime = System.nanoTime
+    var profilingRet = new Array[Long](3);
+
+    // *****   PROFILING    *******
+    val FPGARoutineStartTime = System.nanoTime
 
     def int2ByteArray(arr: Array[Byte], idx: Int, num: Int): Int = {
       arr(idx) = (num & 0xff).toByte
@@ -158,19 +160,18 @@ object MemChainToAlignBatched {
     }
 
     // *****   PROFILING    *******
-    //val JavaHostSendReqTime = System.nanoTime
-    //profilingRet(0) = JavaHostSendReqTime - FPGARoutineStartTime
+    val JavaHostSendReqTime = System.nanoTime
+    profilingRet(0) = JavaHostSendReqTime - FPGARoutineStartTime
 
     val buf2Host = Array.concat(buf1, buf2)
-    //assert(buf2Host.size == (taskPos * 4))
 
     // JNI
     val jni = new SWExtendFPGAJNI
     val bufRet = jni.swExtendFPGAJNI(taskNum * FPGA_RET_PARAM_NUM * 2, buf2Host)  // taskNum * FPGA_RET_PARAM_NUM * 2 == NUM of short integers to be returned
 
     // *****   PROFILING    *******
-    //val JavaHostReceiveReqTime = System.nanoTime
-    //profilingRet(1) = JavaHostReceiveReqTime - JavaHostSendReqTime
+    val JavaHostReceiveReqTime = System.nanoTime
+    profilingRet(1) = JavaHostReceiveReqTime - JavaHostSendReqTime
 
     i = 0
     while (i < taskNum) {
@@ -186,14 +187,12 @@ object MemChainToAlignBatched {
       i += 1
     }
 
-    //conn.closeConnection(); 
-
     // *****   PROFILING    *******
-    //val FPGARoutineEndTime = System.nanoTime
-    //profilingRet(2) = FPGARoutineEndTime - JavaHostReceiveReqTime
+    val FPGARoutineEndTime = System.nanoTime
+    profilingRet(2) = FPGARoutineEndTime - JavaHostReceiveReqTime
     
     // PROFILING return
-    //profilingRet
+    profilingRet
   }
 
 
@@ -383,7 +382,8 @@ object MemChainToAlignBatched {
 
   }
 
-  def memChainToAlnBatched(opt: MemOptType,
+  def memChainToAlnBatchedProfile
+                          (opt: MemOptType,
                            pacLen: Long,
                            pac: Array[Byte],
                            queryLenArray: Array[Int],
@@ -393,7 +393,8 @@ object MemChainToAlignBatched {
                            chainsFilteredArray: Array[Array[MemChainType]],
                            regArrays: Array[MemAlnRegArrayType],
 			   useFPGA: Boolean,
-			   threshold: Int
+			   threshold: Int,
+                           timeBreakdown: SWBatchTimeBreakdown
                           ){
 
     // The coordinate for each read: (chain No., seed No.)
@@ -475,6 +476,9 @@ object MemChainToAlignBatched {
     var taskIdx = 0
 
     while (!isFinished) {
+
+        // *****   PROFILING    *******
+        val initSWStartTime = System.nanoTime
 
 	taskIdx = 0
 	var i = start;
@@ -572,13 +576,27 @@ object MemChainToAlignBatched {
 	i = i+1
       }
 
+      // *****   PROFILING    *******
+      val SWBatchStartTime = System.nanoTime
+      timeBreakdown.initSWBatchTime += SWBatchStartTime - initSWStartTime
+
       if (useFPGA == true) {
         if (taskIdx >= threshold) {
           //val ret = runOnFPGA(taskIdx, numOfReads, fpgaExtTasks, fpgaExtResults)
-          val ret = runOnFPGAJNI(taskIdx, fpgaExtTasks, fpgaExtResults)
+          val ret = runOnFPGAJNIProfile(taskIdx, fpgaExtTasks, fpgaExtResults)
+          // *****   PROFILING    *******
+          timeBreakdown.FPGADataPreProcTime += ret(0)
+          timeBreakdown.FPGARoutineRuntime += ret(1)
+          timeBreakdown.FPGADataPostProcTime += ret(2)
+          timeBreakdown.FPGATaskNum += taskIdx
+          val SWFPGAEndTime = System.nanoTime
+          timeBreakdown.SWBatchOnFPGA += (SWFPGAEndTime - SWBatchStartTime)
 	}
 	else {
           i = 0;
+          // *****   PROFILING    *******
+          timeBreakdown.CPUTaskNum += taskIdx
+
           while (i < taskIdx) {
               fpgaExtResults(i) = extension(fpgaExtTasks(i))
               i = i+1
@@ -587,11 +605,18 @@ object MemChainToAlignBatched {
       }
       else {
         i = 0;
+        // *****   PROFILING    ******* 
+        timeBreakdown.CPUTaskNum += taskIdx
+
         while (i < taskIdx) {
             fpgaExtResults(i) = extension(fpgaExtTasks(i))
             i = i+1
         }
       }
+
+      // *****   PROFILING    *******
+      val postProcessingStartTime = System.nanoTime
+      timeBreakdown.SWBatchRuntime += postProcessingStartTime - SWBatchStartTime
 
       i = 0;
       while (i < taskIdx) {
@@ -618,6 +643,10 @@ object MemChainToAlignBatched {
       isFinished = increRes._1
       start = increRes._2
       end = increRes._3
+
+      // *****   PROFILING    *******
+      val postProcessingEndTime = System.nanoTime
+      timeBreakdown.postProcessSWBatchTime += postProcessingEndTime - postProcessingStartTime
     }
   }
 

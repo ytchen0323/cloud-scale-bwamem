@@ -57,16 +57,16 @@ ALL TIMES.
 //#include "my_socket.h"
 #include "my_timer.h"
 
-#define DATA_SIZE 51200
-#define TOTAL_TASK_NUMS 1024
-#define RESULT_SIZE TOTAL_TASK_NUMS*4
+#define TOTAL_TASK_NUMS 32768
+#define DATA_SIZE (TOTAL_TASK_NUMS*64)
+#define FPGA_RET_PARAM_NUM 4
+#define RESULT_SIZE TOTAL_TASK_NUMS*FPGA_RET_PARAM_NUM
 
 #define DONE 1
 #define FLAG_NUM 2
 
 // packet size interms of # of integers
 #define PACKET_SIZE 2
-#define FPGA_RET_PARAM_NUM 4
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -310,6 +310,7 @@ int main(int argc, char** argv)
 
   // Get the start time
   timespec timer = tic( );
+  timespec socListenTime = diff(timer, timer);
   timespec socSendTime = diff(timer, timer);
   timespec socRecvTime = diff(timer, timer);
   timespec exeTime = diff(timer, timer);
@@ -318,7 +319,11 @@ int main(int argc, char** argv)
 
   while (true) {
     //printf("\n************* Got a new task! *************\n");
+    timer = tic();
+
     int ConnectFD = accept(SocketFD, NULL, NULL);
+
+    accTime (&socListenTime, &timer);
 
     if(0 > ConnectFD) {
       perror("error accept failed");
@@ -344,17 +349,20 @@ int main(int argc, char** argv)
 
     int done = 0;
     while(done == 0) {
-      done = (int) *(shm_addr);
+      done = (int) *((int*)shm_addr);
       clock_nanosleep(CLOCK_REALTIME, 0, &deadline, NULL);
     }
 
     //printf("Copy data to the array in the host\n");
     memcpy(a, shm_addr + FLAG_NUM * sizeof(int), sizeof(int) * data_size);
     
-    //timer = tic();
     accTime (&socSendTime, &timer);
 
     taskNum = a[2];
+    for (int i=0; i<taskNum; i++) {
+      int tmp = *(a+8+i*8+7);
+      assert(tmp >=0 && tmp < TOTAL_TASK_NUMS);
+    }
     //printf("Task Num: %d\n", taskNum);
 
     //printf("\nparameter recieved --- \n");
@@ -417,9 +425,8 @@ int main(int argc, char** argv)
     // put data back to shared memory
     //printf("Put data back to the shared memory\n");
     memcpy(shm_addr + FLAG_NUM * sizeof(int), results, sizeof(int) * FPGA_RET_PARAM_NUM * taskNum);
-    *(shm_addr + sizeof(int)) = DONE;
+    *((int*)(shm_addr + sizeof(int))) = DONE;
 
-    accTime(&socRecvTime, &timer);
     //printf("\n************* Task finished! *************\n");
 
     if (-1 == shutdown(ConnectFD, SHUT_RDWR)) {
@@ -436,7 +443,10 @@ int main(int argc, char** argv)
     shmdt(shm_addr);
     //shmctl(shmid, IPC_RMID, 0);
 
+    accTime(&socRecvTime, &timer);
+
     printf("\n**********timing begin**********\n");
+    printTimeSpec(socListenTime);
     printTimeSpec(socSendTime);
     printTimeSpec(socRecvTime);
     printTimeSpec(exeTime);
