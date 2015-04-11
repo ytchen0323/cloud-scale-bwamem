@@ -45,7 +45,7 @@ object BWAMemWorker1BatchedProfile {
                            profileData: SWBatchTimeBreakdown
                            ): Array[ReadType] = { //all possible alignments for all the reads  
 
-    System.load("/curr/genomics_spark/shared_lib/jniSWExtend.so")
+    System.load("/cdsc_nfs/cdsc0/software/spark/cloud-scale-bwamem-0.1.0/target/jniSWExtend.so")
     //pre-process: transform A/C/G/T to 0,1,2,3
 
     // *****    PROFILING     *****

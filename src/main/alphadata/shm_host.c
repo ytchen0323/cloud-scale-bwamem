@@ -57,9 +57,9 @@ ALL TIMES.
 //#include "my_socket.h"
 #include "my_timer.h"
 
-#define TOTAL_TASK_NUMS 32768
+#define TOTAL_TASK_NUMS 65536
 #define DATA_SIZE (TOTAL_TASK_NUMS*64)
-#define FPGA_RET_PARAM_NUM 4
+#define FPGA_RET_PARAM_NUM 5
 #define RESULT_SIZE TOTAL_TASK_NUMS*FPGA_RET_PARAM_NUM
 
 #define DONE 1

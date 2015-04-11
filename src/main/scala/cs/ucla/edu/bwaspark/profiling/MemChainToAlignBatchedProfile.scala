@@ -35,7 +35,7 @@ object MemChainToAlignBatchedProfile {
   val commonSize = 32
   val indivSize = 32
   val retValues = 8
-  val FPGA_RET_PARAM_NUM = 4
+  val FPGA_RET_PARAM_NUM = 5
 
   //Run DPs on FPGA
   def runOnFPGAJNIProfile
@@ -176,15 +176,15 @@ object MemChainToAlignBatchedProfile {
     i = 0
     while (i < taskNum) {
       if (results(i) == null) results(i) = new ExtRet
-      results(i).idx = tasks(i).idx
-      results(i).qBeg = bufRet(FPGA_RET_PARAM_NUM * 2 * i)
-      results(i).qEnd = bufRet(1 + FPGA_RET_PARAM_NUM * 2 * i)
-      results(i).rBeg = bufRet(2 + FPGA_RET_PARAM_NUM * 2 * i)
-      results(i).rEnd = bufRet(3 + FPGA_RET_PARAM_NUM * 2 * i)
-      results(i).score = bufRet(4 + FPGA_RET_PARAM_NUM * 2 * i)
-      results(i).trueScore = bufRet(5 + FPGA_RET_PARAM_NUM * 2 * i)
-      results(i).width = bufRet(6 + FPGA_RET_PARAM_NUM * 2 * i)
-      i += 1
+      results(i).idx = ((bufRet(1+FPGA_RET_PARAM_NUM*2*i).toInt) << 16) | bufRet(0+FPGA_RET_PARAM_NUM*2*i).toInt
+      results(i).qBeg = bufRet(2+FPGA_RET_PARAM_NUM*2*i)
+      results(i).qEnd = bufRet(3+FPGA_RET_PARAM_NUM*2*i)
+      results(i).rBeg = bufRet(4+FPGA_RET_PARAM_NUM*2*i)
+      results(i).rEnd = bufRet(5+FPGA_RET_PARAM_NUM*2*i)
+      results(i).score = bufRet(6+FPGA_RET_PARAM_NUM*2*i)
+      results(i).trueScore = bufRet(7+FPGA_RET_PARAM_NUM*2*i)
+      results(i).width = bufRet(8+FPGA_RET_PARAM_NUM*2*i)
+      i = i+1
     }
 
     // *****   PROFILING    *******

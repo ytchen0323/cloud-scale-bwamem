@@ -35,19 +35,13 @@ object MemChainToAlignBatched {
   val commonSize = 32
   val indivSize = 32
   val retValues = 8
-  val FPGA_RET_PARAM_NUM = 4
+  val FPGA_RET_PARAM_NUM = 5
 
   //Run DPs on FPGA
   def runOnFPGAJNI(taskNum: Int, //number of tasks
                    tasks: Array[ExtParam], // task array
                    results: Array[ExtRet] // result array
                   ) {
-    // *****   PROFILING    *******
-    //var profilingRet = new Array[Long](3);
-
-    // *****   PROFILING    *******
-    //val FPGARoutineStartTime = System.nanoTime
-
     def int2ByteArray(arr: Array[Byte], idx: Int, num: Int): Int = {
       arr(idx) = (num & 0xff).toByte
       arr(idx+1) = ((num >> 8) & 0xff).toByte
@@ -157,43 +151,25 @@ object MemChainToAlignBatched {
       i = i + 1
     }
 
-    // *****   PROFILING    *******
-    //val JavaHostSendReqTime = System.nanoTime
-    //profilingRet(0) = JavaHostSendReqTime - FPGARoutineStartTime
-
     val buf2Host = Array.concat(buf1, buf2)
-    //assert(buf2Host.size == (taskPos * 4))
 
     // JNI
     val jni = new SWExtendFPGAJNI
     val bufRet = jni.swExtendFPGAJNI(taskNum * FPGA_RET_PARAM_NUM * 2, buf2Host)  // taskNum * FPGA_RET_PARAM_NUM * 2 == NUM of short integers to be returned
 
-    // *****   PROFILING    *******
-    //val JavaHostReceiveReqTime = System.nanoTime
-    //profilingRet(1) = JavaHostReceiveReqTime - JavaHostSendReqTime
-
     i = 0
     while (i < taskNum) {
       if (results(i) == null) results(i) = new ExtRet
-      results(i).idx = tasks(i).idx
-      results(i).qBeg = bufRet(FPGA_RET_PARAM_NUM * 2 * i)
-      results(i).qEnd = bufRet(1 + FPGA_RET_PARAM_NUM * 2 * i)
-      results(i).rBeg = bufRet(2 + FPGA_RET_PARAM_NUM * 2 * i)
-      results(i).rEnd = bufRet(3 + FPGA_RET_PARAM_NUM * 2 * i)
-      results(i).score = bufRet(4 + FPGA_RET_PARAM_NUM * 2 * i)
-      results(i).trueScore = bufRet(5 + FPGA_RET_PARAM_NUM * 2 * i)
-      results(i).width = bufRet(6 + FPGA_RET_PARAM_NUM * 2 * i)
-      i += 1
+      results(i).idx = ((bufRet(1+FPGA_RET_PARAM_NUM*2*i).toInt) << 16) | bufRet(0+FPGA_RET_PARAM_NUM*2*i).toInt
+      results(i).qBeg = bufRet(2+FPGA_RET_PARAM_NUM*2*i)
+      results(i).qEnd = bufRet(3+FPGA_RET_PARAM_NUM*2*i)
+      results(i).rBeg = bufRet(4+FPGA_RET_PARAM_NUM*2*i)
+      results(i).rEnd = bufRet(5+FPGA_RET_PARAM_NUM*2*i)
+      results(i).score = bufRet(6+FPGA_RET_PARAM_NUM*2*i)
+      results(i).trueScore = bufRet(7+FPGA_RET_PARAM_NUM*2*i)
+      results(i).width = bufRet(8+FPGA_RET_PARAM_NUM*2*i)
+      i = i+1
     }
-
-    //conn.closeConnection(); 
-
-    // *****   PROFILING    *******
-    //val FPGARoutineEndTime = System.nanoTime
-    //profilingRet(2) = FPGARoutineEndTime - JavaHostReceiveReqTime
-    
-    // PROFILING return
-    //profilingRet
   }
 
 
