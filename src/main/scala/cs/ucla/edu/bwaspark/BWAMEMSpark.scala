@@ -52,6 +52,8 @@ object BWAMEMSpark {
                                nextOption(map ++ Map('isFPGAAccSWExtend -> value.toInt), tail)
         case "-FPGASWExtThreshold" :: value :: tail =>
                                nextOption(map ++ Map('FPGASWExtThreshold -> value.toInt), tail)
+        case "-jniSWExtendLibPath" :: value :: tail =>
+                               nextOption(map ++ Map('jniSWExtendLibPath -> value.toString), tail)
         case isPairEnd ::  inFASTAPath :: inFASTQPath :: fastqInputFolderNum :: Nil =>  
                                nextOption(map ++ 
                                           Map('isPairEnd -> isPairEnd.toInt) ++ 
@@ -142,6 +144,8 @@ object BWAMEMSpark {
       println("[Error] Undefined isPairEnd argument" + isPairEnd)
       exit(1)
     }
+    if(options.get('jniSWExtendLibPath) != None)
+      bwamemArgs.jniSWExtendLibPath = options('jniSWExtendLibPath).toString
     bwamemArgs.fastaInputPath = options('inFASTAPath).toString
     bwamemArgs.fastqHDFSInputPath = options('inFASTQPath).toString
     bwamemArgs.fastqInputFolderNum = options('fastqInputFolderNum).toString.toInt  

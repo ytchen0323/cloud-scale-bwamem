@@ -19,6 +19,7 @@ class BWAMEMCommand {
     var isSWExtBatched: Boolean = false                // (optional) whether the SWExtend is executed in a batched way
     var swExtBatchSize: Int = 1024                     // (optional) the batch size used for used for SWExtend
     var isFPGAAccSWExtend: Boolean = false             // (optional) whether the FPGA accelerator is used for accelerating SWExtend
-    var fpgaSWExtThreshold: Int = 128               // (optional) the threshold of using FPGA accelerator for SWExtend
+    var fpgaSWExtThreshold: Int = 128                  // (optional) the threshold of using FPGA accelerator for SWExtend
+    var jniSWExtendLibPath: String = "./target/jniSWExtend.so"   // (optional) the JNI library path used for SWExtend FPGA acceleration
 }
 

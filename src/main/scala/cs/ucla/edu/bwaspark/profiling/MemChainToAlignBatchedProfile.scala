@@ -176,7 +176,7 @@ object MemChainToAlignBatchedProfile {
     i = 0
     while (i < taskNum) {
       if (results(i) == null) results(i) = new ExtRet
-      results(i).idx = ((bufRet(1+FPGA_RET_PARAM_NUM*2*i).toInt) << 16) | bufRet(0+FPGA_RET_PARAM_NUM*2*i).toInt
+      results(i).idx = ((bufRet(1+FPGA_RET_PARAM_NUM*2*i).toInt) << 16) | (bufRet(0+FPGA_RET_PARAM_NUM*2*i).toInt & 0xFFFF)
       results(i).qBeg = bufRet(2+FPGA_RET_PARAM_NUM*2*i)
       results(i).qEnd = bufRet(3+FPGA_RET_PARAM_NUM*2*i)
       results(i).rBeg = bufRet(4+FPGA_RET_PARAM_NUM*2*i)

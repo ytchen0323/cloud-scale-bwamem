@@ -45,7 +45,6 @@ object BWAMemWorker1BatchedProfile {
                            profileData: SWBatchTimeBreakdown
                            ): Array[ReadType] = { //all possible alignments for all the reads  
 
-    System.load("/cdsc_nfs/cdsc0/software/spark/cloud-scale-bwamem-0.1.0/target/jniSWExtend.so")
     //pre-process: transform A/C/G/T to 0,1,2,3
 
     // *****    PROFILING     *****
@@ -176,8 +175,12 @@ object BWAMemWorker1BatchedProfile {
 			   seqArray1: Array[FASTQRecord], //the second batch
 			   numOfReads: Int, //the number of reads in each batch
 			   runOnFPGA: Boolean, //if run on FPGA
-			   threshold: Int //the batch threshold to run on FPGA
-                          ): PairEndBatchedProfile = { //all possible alignment  
+			   threshold: Int, //the batch threshold to run on FPGA
+                           jniSWExtendLibPath: String = null // SWExtend Library Path
+                          ): PairEndBatchedProfile = { //all possible alignment
+    if(jniSWExtendLibPath != null && runOnFPGA)
+      System.load(jniSWExtendLibPath)
+        
     var pairEndBatchProflie = new PairEndBatchedProfile
     var swBatch0Profile = new SWBatchTimeBreakdown
     val readArray0 = bwaMemWorker1BatchedProfile(opt, bwt, bns, pac, pes, seqArray0, numOfReads, runOnFPGA, threshold, swBatch0Profile)

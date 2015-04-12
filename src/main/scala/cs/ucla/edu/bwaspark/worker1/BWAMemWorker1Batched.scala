@@ -41,7 +41,6 @@ object BWAMemWorker1Batched {
 			   threshold: Int //the batch threshold to run on FPGA
                            ): Array[ReadType] = { //all possible alignments for all the reads  
 
-    System.load("/curr/genomics_spark/shared_lib/jniSWExtend.so")
     //pre-process: transform A/C/G/T to 0,1,2,3
 
     def locusEncode(locus: Char): Byte = {
@@ -151,8 +150,11 @@ object BWAMemWorker1Batched {
 			   seqArray1: Array[FASTQRecord], //the second batch
 			   numOfReads: Int, //the number of reads in each batch
 			   runOnFPGA: Boolean, //if run on FPGA
-			   threshold: Int //the batch threshold to run on FPGA
+			   threshold: Int, //the batch threshold to run on FPGA
+                           jniSWExtendLibPath: String = null // SWExtend Library Path
                           ): Array[PairEndReadType] = { //all possible alignment  
+    if(jniSWExtendLibPath != null && runOnFPGA)
+      System.load(jniSWExtendLibPath)
  
     val readArray0 = bwaMemWorker1Batched(opt, bwt, bns, pac, pes, seqArray0, numOfReads, runOnFPGA, threshold)
     val readArray1 = bwaMemWorker1Batched(opt, bwt, bns, pac, pes, seqArray1, numOfReads, runOnFPGA, threshold)

@@ -67,6 +67,7 @@ ALL TIMES.
 
 // packet size interms of # of integers
 #define PACKET_SIZE 2
+#define TIME_BUF_SIZE 8
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -102,6 +103,46 @@ load_file_to_memory(const char *filename, char **result)
   (*result)[size] = 0;
   return size;
 }
+
+
+void collect_timer_stats(
+      int ConnectFD,
+      timespec* socListenTime, 
+      timespec* socSendTime,
+      timespec* socRecvTime,
+      timespec* exeTime,
+      timespec* timer)
+{
+  int time_buf[TIME_BUF_SIZE];  
+
+  printf("**********   collect socket timing information and reset timer   **********\n");
+  printTimeSpec(*socListenTime);
+  printTimeSpec(*socSendTime);
+  printTimeSpec(*socRecvTime);
+  printTimeSpec(*exeTime);
+  printf("**********   end   **********\n\n");
+  time_buf[0] = socListenTime->tv_sec;
+  time_buf[1] = socListenTime->tv_nsec;
+  time_buf[2] = socSendTime->tv_sec;
+  time_buf[3] = socSendTime->tv_nsec;
+  time_buf[4] = socRecvTime->tv_sec;
+  time_buf[5] = socRecvTime->tv_nsec;
+  time_buf[6] = exeTime->tv_sec;
+  time_buf[7] = exeTime->tv_nsec;
+  send(ConnectFD, time_buf, TIME_BUF_SIZE * sizeof(int), 0); 
+  close(ConnectFD);
+  *socListenTime = diff(*timer, *timer);
+  *socSendTime = diff(*timer, *timer);
+  *socRecvTime = diff(*timer, *timer);
+  *exeTime = diff(*timer, *timer);
+  printf("**********   after timer reset  **********\n");
+  printTimeSpec(*socListenTime);
+  printTimeSpec(*socSendTime);
+  printTimeSpec(*socRecvTime);
+  printTimeSpec(*exeTime);
+  printf("**********   end   **********\n\n");
+}
+
 
 int main(int argc, char** argv)
 {
@@ -315,13 +356,20 @@ int main(int argc, char** argv)
   timespec socRecvTime = diff(timer, timer);
   timespec exeTime = diff(timer, timer);
 
+  bool broadcastFlag = false;
+
   int packet_buf[PACKET_SIZE];
+  int time_buf[TIME_BUF_SIZE];
 
   while (true) {
     //printf("\n************* Got a new task! *************\n");
     timer = tic();
 
     int ConnectFD = accept(SocketFD, NULL, NULL);
+    if (!broadcastFlag) { 
+        broadcastFlag = true;
+        timer = tic();
+    }
 
     accTime (&socListenTime, &timer);
 
@@ -331,10 +379,19 @@ int main(int argc, char** argv)
       exit(EXIT_FAILURE);
     }    
     
+    read(ConnectFD, &packet_buf, PACKET_SIZE * sizeof(int));
+
+    // send FPGA stats back to java application
+    if(packet_buf[0] == -1) {
+      // for profiling use
+      collect_timer_stats(ConnectFD, &socListenTime, &socSendTime, &socRecvTime, &exeTime, &timer);
+      broadcastFlag = false;
+      continue;
+    }
+
     char* shm_addr;
     int shmid = -1;
     int data_size = -1;  // data sent to FPGA (unit: int)
-    read(ConnectFD, &packet_buf, PACKET_SIZE * sizeof(int));
     shmid = packet_buf[0];
     data_size = packet_buf[1];
     printf("Shmid: %d, Data size (# of int): %d\n", shmid, data_size);
@@ -437,7 +494,7 @@ int main(int argc, char** argv)
     }
     close(ConnectFD);
 
-    printf("done\n");
+    //printf("done\n");
 
     // free the shared memory
     shmdt(shm_addr);
@@ -445,12 +502,12 @@ int main(int argc, char** argv)
 
     accTime(&socRecvTime, &timer);
 
-    printf("\n**********timing begin**********\n");
+    printf("**********timing begin**********\n");
     printTimeSpec(socListenTime);
     printTimeSpec(socSendTime);
     printTimeSpec(socRecvTime);
     printTimeSpec(exeTime);
-    printf("\n**********timing end**********\n");
+    printf("**********timing end**********\n\n");
   }
     
   close(SocketFD);

@@ -28,6 +28,10 @@ import htsjdk.samtools.SAMFileHeader
 import java.io.FileReader
 import java.io.BufferedReader
 
+// for profiling
+import accUCLA.api._
+import java.io.IOException
+
 // profiling
 import cs.ucla.edu.bwaspark.profiling._
 import cs.ucla.edu.bwaspark.profiling.BWAMemWorker1BatchedProfile._
@@ -41,6 +45,7 @@ object FastMapProfile {
   private val SAM_OUT_LOCAL = 1
   private val ADAM_OUT = 2
   private val SAM_OUT_DFS = 3
+  private val TIME_BUF_SIZE = 8
 
   /**
     *  memMain: the main function to perform read mapping
@@ -157,6 +162,26 @@ object FastMapProfile {
   } 
  
 
+  private def getFPGAProfilingStats(addr: String, port: Int) {
+    val conn = new Connector2FPGA(addr, port)
+    conn.buildConnection(0)
+    var packet = new Array[Int](2)
+    packet(0) = -1
+    packet(1) = -1
+    conn.send(packet)
+    val timeBuf = conn.receive_int(TIME_BUF_SIZE)
+    conn.closeConnection
+
+    val fpgaSocketListenTime = timeBuf(0).asInstanceOf[Double] + (timeBuf(1).asInstanceOf[Double] / 1E9)
+    val fpgaDataSendTime = timeBuf(2).asInstanceOf[Double] + (timeBuf(3).asInstanceOf[Double] / 1E9)
+    val fpgaDataRecvTime = timeBuf(4).asInstanceOf[Double] + (timeBuf(5).asInstanceOf[Double] / 1E9)
+    val fpgaExeTime = timeBuf(6).asInstanceOf[Double] + (timeBuf(7).asInstanceOf[Double] / 1E9)
+    println("FPGA Socket Listen Time (s):" + fpgaSocketListenTime)
+    println("FPGA Data Send Time (s):" + fpgaDataSendTime)
+    println("FPGA Data Recv Time (s):" + fpgaDataRecvTime)
+    println("FPGA Execution Time (s):" + fpgaExeTime)
+  }
+
   /**
     *  memPairEndMapping: the main function to perform pair-end read mapping
     *
@@ -188,7 +213,7 @@ object FastMapProfile {
     val swExtBatchSize = bwamemArgs.swExtBatchSize             // the batch size used for used for SWExtend
     val isFPGAAccSWExtend = bwamemArgs.isFPGAAccSWExtend       // whether the FPGA accelerator is used for accelerating SWExtend
     val fpgaSWExtThreshold = bwamemArgs.fpgaSWExtThreshold     // the threshold of using FPGA accelerator for SWExtend
-
+    val jniSWExtendLibPath = bwamemArgs.jniSWExtendLibPath     // (optional) the JNI library path used for SWExtend FPGA acceleration
 
     // Initialize output writer
     val samWriter = new SAMWriter
@@ -271,14 +296,14 @@ object FastMapProfile {
           counter += 1
           if(counter == batchedDegree) {
             ret = ret :+ pairEndBwaMemWorker1BatchedProfile(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 
-                                               null, end1, end2, batchedDegree, isFPGAAccSWExtend, fpgaSWExtThreshold)
+                                               null, end1, end2, batchedDegree, isFPGAAccSWExtend, fpgaSWExtThreshold, jniSWExtendLibPath)
             counter = 0
           }
         }
 
         if(counter != 0) {
           ret = ret :+ pairEndBwaMemWorker1BatchedProfile(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 
-                                             null, end1, end2, counter, isFPGAAccSWExtend, fpgaSWExtThreshold)
+                                             null, end1, end2, counter, isFPGAAccSWExtend, fpgaSWExtThreshold, jniSWExtendLibPath)
         }
 
         ret.toArray.iterator
@@ -405,6 +430,7 @@ object FastMapProfile {
     println("Worker1 Time: " + worker1Time)
     println("Calculate Metrics Time: " + calMetricsTime)
     println("Worker2 Time: " + worker2Time)
+    getFPGAProfilingStats("n1", 7000)
   }
 
 } 

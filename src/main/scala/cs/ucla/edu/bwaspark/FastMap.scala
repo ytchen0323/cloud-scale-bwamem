@@ -284,6 +284,7 @@ object FastMap {
     val swExtBatchSize = bwamemArgs.swExtBatchSize             // the batch size used for used for SWExtend
     val isFPGAAccSWExtend = bwamemArgs.isFPGAAccSWExtend       // whether the FPGA accelerator is used for accelerating SWExtend
     val fpgaSWExtThreshold = bwamemArgs.fpgaSWExtThreshold     // the threshold of using FPGA accelerator for SWExtend
+    val jniSWExtendLibPath = bwamemArgs.jniSWExtendLibPath     // (optional) the JNI library path used for SWExtend FPGA acceleration
 
     // Initialize output writer
     val samWriter = new SAMWriter
@@ -368,14 +369,14 @@ object FastMap {
             counter += 1
             if(counter == batchedDegree) {
               ret = ret :+ pairEndBwaMemWorker1Batched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 
-                                                 null, end1, end2, batchedDegree, isFPGAAccSWExtend, fpgaSWExtThreshold)
+                                                 null, end1, end2, batchedDegree, isFPGAAccSWExtend, fpgaSWExtThreshold, jniSWExtendLibPath)
               counter = 0
             }
           }
 
           if(counter != 0) {
             ret = ret :+ pairEndBwaMemWorker1Batched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bwt, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 
-                                               null, end1, end2, counter, isFPGAAccSWExtend, fpgaSWExtThreshold)
+                                               null, end1, end2, counter, isFPGAAccSWExtend, fpgaSWExtThreshold, jniSWExtendLibPath)
           }
 
           ret.toArray.iterator
