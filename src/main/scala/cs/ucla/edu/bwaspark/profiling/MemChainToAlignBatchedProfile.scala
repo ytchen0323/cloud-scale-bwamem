@@ -475,7 +475,9 @@ object MemChainToAlignBatchedProfile {
     var fpgaExtResults = new Array[ExtRet](numOfReads)
     var taskIdx = 0
 
-    while (!isFinished) {
+    var thresholdFlag = false
+
+    while (!isFinished && !thresholdFlag) {
 
         // *****   PROFILING    *******
         val initSWStartTime = System.nanoTime
@@ -593,6 +595,7 @@ object MemChainToAlignBatchedProfile {
           timeBreakdown.SWBatchOnFPGA += (SWFPGAEndTime - SWBatchStartTime)
 	}
 	else {
+          thresholdFlag = true
           i = 0;
           // *****   PROFILING    *******
           timeBreakdown.CPUTaskNum += taskIdx
@@ -647,6 +650,118 @@ object MemChainToAlignBatchedProfile {
       // *****   PROFILING    *******
       val postProcessingEndTime = System.nanoTime
       timeBreakdown.postProcessSWBatchTime += postProcessingEndTime - postProcessingStartTime
+    }
+
+    if (!isFinished) {
+      var i = start;
+      while (i < end) {
+  
+        // The main for loop    
+	var chainIdx = coordinates(i)(0) 
+        var seedIdx = coordinates(i)(1)
+        while(seedIdx >= 0) {
+	  val seed = chainsFilteredArray(i)(chainIdx).seedsRefArray(preResultsOfSW(i)(chainIdx).srt(seedIdx).index)
+	  var extensionFlag = testExtension(opt, seed, regArrays(i))
+	  var overlapFlag = -1
+	  if (extensionFlag < regArrays(i).curLength) overlapFlag = checkOverlapping(seedIdx+1, seed, chainsFilteredArray(i)(chainIdx), preResultsOfSW(i)(chainIdx).srt)
+          // no overlapping seeds; then skip extension
+	  if (extensionFlag < regArrays(i).curLength && overlapFlag == chainsFilteredArray(i)(chainIdx).seeds.length) {
+	    preResultsOfSW(i)(chainIdx).srt(seedIdx).index = MARKED
+	  }
+	  else {
+            // push the current align reg into the output list
+            // initialize a new alnreg
+            var reg = new MemAlnRegType
+            reg.width = opt.w
+            reg.score = seed.len * opt.a
+            reg.trueScore = seed.len * opt.a
+            reg.qBeg = 0
+            reg.rBeg = seed.rBeg
+            reg.qEnd = queryLenArray(i)
+            reg.rEnd = seed.rBeg + seed.len
+            if (seed.qBeg > 0 || (seed.qBeg + seed.len) != queryLenArray(i)) {
+	      var extParam = new ExtParam
+              extParam.leftQlen = seed.qBeg
+              var ii = 0
+	      if (extParam.leftQlen > 0) {
+                extParam.leftQs = new Array[Byte](extParam.leftQlen)
+                ii = 0
+                while(ii < extParam.leftQlen) {
+                  extParam.leftQs(ii) = queryArray(i)(extParam.leftQlen - 1 - ii)
+                  ii += 1
+                }
+	        extParam.leftRlen = (seed.rBeg - (preResultsOfSW(i)(chainIdx).rmax)(0)).toInt
+	        extParam.leftRs = new Array[Byte](extParam.leftRlen)
+                ii = 0
+                while(ii < extParam.leftRlen) {
+                  extParam.leftRs(ii) = preResultsOfSW(i)(chainIdx).rseq(extParam.leftRlen - 1 - ii)
+                  ii += 1
+                }
+	      }
+	      else {
+		extParam.leftQs = null
+		extParam.leftRlen = 0
+		extParam.leftRs = null
+	      }
+
+	      var qe = seed.qBeg + seed.len
+              extParam.rightQlen = queryLenArray(i) - qe
+	      if (extParam.rightQlen > 0) {
+                extParam.rightQs = new Array[Byte](extParam.rightQlen)
+                ii = 0
+                while(ii < extParam.rightQlen) {
+                  extParam.rightQs(ii) = queryArray(i)(ii + qe)
+                  ii += 1
+                }
+	        var re = seed.rBeg + seed.len - preResultsOfSW(i)(chainIdx).rmax(0)
+	        extParam.rightRlen = (preResultsOfSW(i)(chainIdx).rmax(1) - preResultsOfSW(i)(chainIdx).rmax(0) - re).toInt
+	        extParam.rightRs = new Array[Byte](extParam.rightRlen)
+                ii = 0
+                while(ii < extParam.rightRlen) {
+                  extParam.rightRs(ii) = preResultsOfSW(i)(chainIdx).rseq(ii + re.toInt)
+                  ii += 1
+                }
+	      }
+	      else {
+		extParam.rightQs = null
+		extParam.rightRlen = 0
+		extParam.rightRs = null
+	      }
+	      extParam.w = opt.w
+	      extParam.mat = opt.mat
+	      extParam.oDel = opt.oDel
+	      extParam.oIns = opt.oIns
+	      extParam.eDel = opt.eDel
+	      extParam.eIns = opt.eIns
+	      extParam.penClip5 = opt.penClip5
+	      extParam.penClip3 = opt.penClip3
+	      extParam.zdrop = opt.zdrop
+	      extParam.h0 = seed.len * opt.a
+	      extParam.regScore = reg.score
+	      extParam.qBeg = seed.qBeg
+              extParam.idx = i
+              var extResult = extension(extParam)
+              reg.qBeg = extResult.qBeg
+              reg.rBeg = extResult.rBeg + seed.rBeg
+              reg.qEnd = extResult.qEnd + seed.qBeg + seed.len
+              reg.rEnd = extResult.rEnd + seed.rBeg + seed.len
+              reg.score = extResult.score
+              reg.trueScore = extResult.trueScore
+              reg.width = extResult.width
+              reg.seedCov = computeSeedCoverage(chainsFilteredArray(i)(chainIdx), reg)
+              regArrays(i).regs(regArrays(i).curLength) = reg
+              regArrays(i).curLength += 1
+            }
+	  }
+	  if (seedIdx > 0) seedIdx -= 1
+	  else if (chainIdx == chainsFilteredArray(i).length - 1) seedIdx = -1
+	  else {
+	    chainIdx += 1
+	    seedIdx = chainsFilteredArray(i)(chainIdx).seeds.length - 1
+          }
+        }  
+        i += 1
+      }
     }
   }
 
