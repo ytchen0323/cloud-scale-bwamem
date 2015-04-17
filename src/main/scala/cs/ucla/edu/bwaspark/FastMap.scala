@@ -386,7 +386,7 @@ object FastMap {
       }      
 
       pairEndFASTQRDD.unpersist(true)
-      reads.cache
+//      reads.cache
 
       // MemPeStat (Reduce step)
       val peStatPrepRDD = reads.map( pairSeq => memPeStatPrep(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns.l_pac, pairSeq) )
@@ -395,126 +395,126 @@ object FastMap {
       // *****   PROFILING    *******
       val worker1EndTime = System.currentTimeMillis
       worker1Time += (worker1EndTime - startTime)
-
-      memPeStatCompute(bwaMemOptGlobal.value, peStatPrepArray, pes)
-
-      // *****   PROFILING    *******
-      val calMetricsEndTime = System.currentTimeMillis
-      calMetricsTime += (calMetricsEndTime - worker1EndTime)
-
-      println("@MemPeStat")
-      j = 0
-      while(j < 4) {
-        println("pes(" + j + "): " + pes(j).low + " " + pes(j).high + " " + pes(j).failed + " " + pes(j).avg + " " + pes(j).std)
-        j += 1
-      }
-        
-      // Worker2 (Map step)
-      // NOTE: we may need to find how to utilize the numProcessed variable!!!
-      // Batched Processing for P-SW kernel
-      if(isPSWBatched) {
-        // Not output SAM format file
-        if(outputChoice == NO_OUT_FILE) {
-          def it2ArrayIt(iter: Iterator[PairEndReadType]): Iterator[Unit] = {
-            var counter = 0
-            var ret: Vector[Unit] = scala.collection.immutable.Vector.empty
-            var subBatch = new Array[PairEndReadType](subBatchSize)
-            while (iter.hasNext) {
-              subBatch(counter) = iter.next
-              counter = counter + 1
-              if (counter == subBatchSize) {
-                ret = ret :+ pairEndBwaMemWorker2PSWBatched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, subBatchSize, isPSWJNI, jniLibPath, samHeader) 
-                counter = 0
-              }
-            }
-            if (counter != 0)
-              ret = ret :+ pairEndBwaMemWorker2PSWBatched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, counter, isPSWJNI, jniLibPath, samHeader)
-            ret.toArray.iterator
-          }
-
-          val count = reads.mapPartitions(it2ArrayIt).count
-          println("Count: " + count)
- 
-          reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
-        }
-        // Output SAM format file
-        else if(outputChoice == SAM_OUT_LOCAL || outputChoice == SAM_OUT_DFS) {
-          def it2ArrayIt(iter: Iterator[PairEndReadType]): Iterator[Array[Array[String]]] = {
-            var counter = 0
-            var ret: Vector[Array[Array[String]]] = scala.collection.immutable.Vector.empty
-            var subBatch = new Array[PairEndReadType](subBatchSize)
-            while (iter.hasNext) {
-              subBatch(counter) = iter.next
-              counter = counter + 1
-              if (counter == subBatchSize) {
-                ret = ret :+ pairEndBwaMemWorker2PSWBatchedSAMRet(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, subBatchSize, isPSWJNI, jniLibPath, samHeader) 
-                counter = 0
-              }
-            }
-            if (counter != 0)
-              ret = ret :+ pairEndBwaMemWorker2PSWBatchedSAMRet(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, counter, isPSWJNI, jniLibPath, samHeader)
-            ret.toArray.iterator
-          }
- 
-          if(outputChoice == SAM_OUT_LOCAL) {
-            val samStrings = reads.mapPartitions(it2ArrayIt).collect
-            //val samStrings = reads.mapPartitions(it2ArrayIt).flatMap(s => s).map(pairSeq => pairSeq(0) + pairSeq(1)).collect
-            println("Count: " + samStrings.size)
-            reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
- 
-            // Write to the output file in a sequencial way (for now)
-            samStrings.foreach(s => {
-              s.foreach(pairSeq => {
-                samWriter.writeString(pairSeq(0))
-                samWriter.writeString(pairSeq(1))
-              } )
-            } )
-            //samStrings.foreach(s => samWriter.writeString(s))
-          }
-          else if(outputChoice == SAM_OUT_DFS) {
-            val samStrings = reads.mapPartitions(it2ArrayIt).flatMap(s => s).map(pairSeq => pairSeq(0) + pairSeq(1))
-            reads.unpersist(true)
-            samStrings.saveAsTextFile(outputPath + "/body")
-          }
-        }
-        // Output ADAM format file
-        else if(outputChoice == ADAM_OUT) {
-          def it2ArrayIt(iter: Iterator[PairEndReadType]): Iterator[Array[AlignmentRecord]] = {
-            var counter = 0
-            var ret: Vector[Array[AlignmentRecord]] = scala.collection.immutable.Vector.empty
-            var subBatch = new Array[PairEndReadType](subBatchSize)
-            while (iter.hasNext) {
-              subBatch(counter) = iter.next
-              counter = counter + 1
-              if (counter == subBatchSize) {
-                ret = ret :+ pairEndBwaMemWorker2PSWBatchedADAMRet(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, subBatchSize, isPSWJNI, jniLibPath, samHeader, seqDict, readGroup) 
-                counter = 0
-              }
-            }
-            if (counter != 0)
-              ret = ret :+ pairEndBwaMemWorker2PSWBatchedADAMRet(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, counter, isPSWJNI, jniLibPath, samHeader, seqDict, readGroup)
-            ret.toArray.iterator
-          }
- 
-          //val adamObjRDD = sc.union(reads.mapPartitions(it2ArrayIt))
-          val adamObjRDD = reads.mapPartitions(it2ArrayIt).flatMap(r => r)
-          adamObjRDD.adamSave(outputPath + "/"  + folderID.toString())
-          numProcessed += batchedReadNum
-          folderID += 1
-          reads.unpersist(true)
-          adamObjRDD.unpersist(true)  // free RDD; seems to be needed (free storage information is wrong)         
-        }
-      }
-      // NOTE: need to be modified!!!
-      // Normal read-based processing
-      else {
-        val count = reads.map(pairSeq => pairEndBwaMemWorker2(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, pairSeq, samHeader) ).count
-        numProcessed += count.toLong
-      }
- 
-      // *****   PROFILING    *******
-      val worker2EndTime = System.currentTimeMillis
-      worker2Time += (worker2EndTime - calMetricsEndTime)
+//
+//      memPeStatCompute(bwaMemOptGlobal.value, peStatPrepArray, pes)
+//
+//      // *****   PROFILING    *******
+//      val calMetricsEndTime = System.currentTimeMillis
+//      calMetricsTime += (calMetricsEndTime - worker1EndTime)
+//
+//      println("@MemPeStat")
+//      j = 0
+//      while(j < 4) {
+//        println("pes(" + j + "): " + pes(j).low + " " + pes(j).high + " " + pes(j).failed + " " + pes(j).avg + " " + pes(j).std)
+//        j += 1
+//      }
+//        
+//      // Worker2 (Map step)
+//      // NOTE: we may need to find how to utilize the numProcessed variable!!!
+//      // Batched Processing for P-SW kernel
+//      if(isPSWBatched) {
+//        // Not output SAM format file
+//        if(outputChoice == NO_OUT_FILE) {
+//          def it2ArrayIt(iter: Iterator[PairEndReadType]): Iterator[Unit] = {
+//            var counter = 0
+//            var ret: Vector[Unit] = scala.collection.immutable.Vector.empty
+//            var subBatch = new Array[PairEndReadType](subBatchSize)
+//            while (iter.hasNext) {
+//              subBatch(counter) = iter.next
+//              counter = counter + 1
+//              if (counter == subBatchSize) {
+//                ret = ret :+ pairEndBwaMemWorker2PSWBatched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, subBatchSize, isPSWJNI, jniLibPath, samHeader) 
+//                counter = 0
+//              }
+//            }
+//            if (counter != 0)
+//              ret = ret :+ pairEndBwaMemWorker2PSWBatched(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, counter, isPSWJNI, jniLibPath, samHeader)
+//            ret.toArray.iterator
+//          }
+//
+//          val count = reads.mapPartitions(it2ArrayIt).count
+//          println("Count: " + count)
+// 
+//          reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
+//        }
+//        // Output SAM format file
+//        else if(outputChoice == SAM_OUT_LOCAL || outputChoice == SAM_OUT_DFS) {
+//          def it2ArrayIt(iter: Iterator[PairEndReadType]): Iterator[Array[Array[String]]] = {
+//            var counter = 0
+//            var ret: Vector[Array[Array[String]]] = scala.collection.immutable.Vector.empty
+//            var subBatch = new Array[PairEndReadType](subBatchSize)
+//            while (iter.hasNext) {
+//              subBatch(counter) = iter.next
+//              counter = counter + 1
+//              if (counter == subBatchSize) {
+//                ret = ret :+ pairEndBwaMemWorker2PSWBatchedSAMRet(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, subBatchSize, isPSWJNI, jniLibPath, samHeader) 
+//                counter = 0
+//              }
+//            }
+//            if (counter != 0)
+//              ret = ret :+ pairEndBwaMemWorker2PSWBatchedSAMRet(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, counter, isPSWJNI, jniLibPath, samHeader)
+//            ret.toArray.iterator
+//          }
+// 
+//          if(outputChoice == SAM_OUT_LOCAL) {
+//            val samStrings = reads.mapPartitions(it2ArrayIt).collect
+//            //val samStrings = reads.mapPartitions(it2ArrayIt).flatMap(s => s).map(pairSeq => pairSeq(0) + pairSeq(1)).collect
+//            println("Count: " + samStrings.size)
+//            reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
+// 
+//            // Write to the output file in a sequencial way (for now)
+//            samStrings.foreach(s => {
+//              s.foreach(pairSeq => {
+//                samWriter.writeString(pairSeq(0))
+//                samWriter.writeString(pairSeq(1))
+//              } )
+//            } )
+//            //samStrings.foreach(s => samWriter.writeString(s))
+//          }
+//          else if(outputChoice == SAM_OUT_DFS) {
+//            val samStrings = reads.mapPartitions(it2ArrayIt).flatMap(s => s).map(pairSeq => pairSeq(0) + pairSeq(1))
+//            reads.unpersist(true)
+//            samStrings.saveAsTextFile(outputPath + "/body")
+//          }
+//        }
+//        // Output ADAM format file
+//        else if(outputChoice == ADAM_OUT) {
+//          def it2ArrayIt(iter: Iterator[PairEndReadType]): Iterator[Array[AlignmentRecord]] = {
+//            var counter = 0
+//            var ret: Vector[Array[AlignmentRecord]] = scala.collection.immutable.Vector.empty
+//            var subBatch = new Array[PairEndReadType](subBatchSize)
+//            while (iter.hasNext) {
+//              subBatch(counter) = iter.next
+//              counter = counter + 1
+//              if (counter == subBatchSize) {
+//                ret = ret :+ pairEndBwaMemWorker2PSWBatchedADAMRet(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, subBatchSize, isPSWJNI, jniLibPath, samHeader, seqDict, readGroup) 
+//                counter = 0
+//              }
+//            }
+//            if (counter != 0)
+//              ret = ret :+ pairEndBwaMemWorker2PSWBatchedADAMRet(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, subBatch, counter, isPSWJNI, jniLibPath, samHeader, seqDict, readGroup)
+//            ret.toArray.iterator
+//          }
+// 
+//          //val adamObjRDD = sc.union(reads.mapPartitions(it2ArrayIt))
+//          val adamObjRDD = reads.mapPartitions(it2ArrayIt).flatMap(r => r)
+//          adamObjRDD.adamSave(outputPath + "/"  + folderID.toString())
+//          numProcessed += batchedReadNum
+//          folderID += 1
+//          reads.unpersist(true)
+//          adamObjRDD.unpersist(true)  // free RDD; seems to be needed (free storage information is wrong)         
+//        }
+//      }
+//      // NOTE: need to be modified!!!
+//      // Normal read-based processing
+//      else {
+//        val count = reads.map(pairSeq => pairEndBwaMemWorker2(bwaMemOptGlobal.value, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 0, pes, pairSeq, samHeader) ).count
+//        numProcessed += count.toLong
+//      }
+// 
+//      // *****   PROFILING    *******
+//      val worker2EndTime = System.currentTimeMillis
+//      worker2Time += (worker2EndTime - calMetricsEndTime)
     }
 
     if(outputChoice == SAM_OUT_LOCAL)

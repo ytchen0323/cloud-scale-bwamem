@@ -420,7 +420,7 @@ int main(int argc, char** argv)
       int tmp = *(a+8+i*8+7);
       assert(tmp >=0 && tmp < TOTAL_TASK_NUMS);
     }
-    //printf("Task Num: %d\n", taskNum);
+    printf("Task Num: %d\n", taskNum);
 
     //printf("\nparameter recieved --- \n");
     //Write our data set into the input array in device memory 

@@ -652,6 +652,9 @@ object MemChainToAlignBatchedProfile {
       timeBreakdown.postProcessSWBatchTime += postProcessingEndTime - postProcessingStartTime
     }
 
+    // *****   PROFILING    *******
+    val SWNoBatchStartTime = System.nanoTime
+ 
     if (!isFinished) {
       var i = start;
       while (i < end) {
@@ -660,6 +663,9 @@ object MemChainToAlignBatchedProfile {
 	var chainIdx = coordinates(i)(0) 
         var seedIdx = coordinates(i)(1)
         while(seedIdx >= 0) {
+          // *****   PROFILING    *******
+          timeBreakdown.CPUTaskNum += 1
+          
 	  val seed = chainsFilteredArray(i)(chainIdx).seedsRefArray(preResultsOfSW(i)(chainIdx).srt(seedIdx).index)
 	  var extensionFlag = testExtension(opt, seed, regArrays(i))
 	  var overlapFlag = -1
@@ -759,9 +765,14 @@ object MemChainToAlignBatchedProfile {
 	    chainIdx += 1
 	    seedIdx = chainsFilteredArray(i)(chainIdx).seeds.length - 1
           }
+
         }  
         i += 1
       }
+
+      // *****   PROFILING    *******
+      val SWNoBatchEndTime = System.nanoTime
+      timeBreakdown.SWBatchRuntime += (SWNoBatchEndTime - SWNoBatchStartTime)
     }
   }
 
