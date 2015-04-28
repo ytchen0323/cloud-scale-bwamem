@@ -430,7 +430,18 @@ object FastMapProfile {
     println("Worker1 Time: " + worker1Time)
     println("Calculate Metrics Time: " + calMetricsTime)
     println("Worker2 Time: " + worker2Time)
+    println("n0 stats")
+    getFPGAProfilingStats("n0", 7000)
+    println("n1 stats")
+    getFPGAProfilingStats("n1", 7000)
+    println("n2 stats")
     getFPGAProfilingStats("n2", 7000)
+    println("n3 stats")
+    getFPGAProfilingStats("n3", 7000)
+    println("n4 stats")
+    getFPGAProfilingStats("n4", 7000)
+    println("n5 stats")
+    getFPGAProfilingStats("n5", 7000)
   }
 
 } 
