@@ -78,6 +78,18 @@ ALL TIMES.
 #include <sys/sem.h>
 #include <time.h>
 
+#include "../../../node-acc-manager/protobuf/TaskInfo/cpp/TaskInfo.pb.h"
+#include "../../../node-acc-manager/nodeAM_dev/MsgConnector.h"
+#include "../../../node-acc-manager/util/cpp/my_socket.h"
+
+// !!! sync these ports with NAM !!!
+#define AD_HOST_PORT 6000
+#define AD_HOST_KILL_PORT 6001
+#define AD_HOST_BWAMEM_PORT 6002
+#define ADHOST_NAM_PORT 6008 
+
+#define ACCEPT_KILL 1
+
 ////////////////////////////////////////////////////////////////////////////////
 
 int
@@ -326,7 +338,7 @@ int main(int argc, char** argv)
   memset(&stSockAddr, 0, sizeof(stSockAddr));
 
   stSockAddr.sin_family = AF_INET;
-  stSockAddr.sin_port = htons(7000);
+  stSockAddr.sin_port = htons(AD_HOST_BWAMEM_PORT);
   stSockAddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
   if(-1 == bind(SocketFD,(struct sockaddr *)&stSockAddr, sizeof(stSockAddr))) {
@@ -341,6 +353,18 @@ int main(int argc, char** argv)
     exit(EXIT_FAILURE);
   }
 
+#if ACCEPT_KILL
+		// Get shared memory information
+		char* shm_nam_addr;
+		int shm_nam_id = getKillHostInfoFromNAM();
+		printf("Shmid: %d\n", shm_nam_id);
+
+		// Set up shared memory
+		if((shm_nam_addr = (char *) shmat(shm_nam_id, NULL, 0)) == (char *) -1) {
+				perror("Server: shmat failed. (for NAM)");
+				exit(1);
+		}
+#endif
 
   int taskNum = -1;
 
@@ -364,6 +388,37 @@ int main(int argc, char** argv)
   while (true) {
     //printf("\n************* Got a new task! *************\n");
     timer = tic();
+
+     
+#if ACCEPT_KILL
+    if ((int)*((int*)(shm_nam_addr)) == 1) // TODO sleep sometime?
+      break;
+#endif
+    
+    // TODO change the following accept as non-blocking
+    // In fact, we implement it with blocking socket but wait for a given time interval
+    fd_set input;
+    FD_ZERO(&input);
+    FD_SET(SocketFD, &input);
+    // time out setting
+    struct timespec timeout;
+    timeout.tv_sec  = 0;
+    timeout.tv_nsec = 1000;
+    int n = pselect(SocketFD + 1, &input, NULL, NULL, &timeout, NULL);
+    if (n == -1) {
+      //something wrong
+      perror("error select failed");
+      close(SocketFD);
+      exit(EXIT_FAILURE);
+    }
+    else if(n == 0)
+      continue;  // timeout, try to poll the NAM signal and the map task again!
+    if(!FD_ISSET(SocketFD, &input)) {
+						//something wrong
+						perror("error select failed");
+						close(SocketFD);
+						exit(EXIT_FAILURE);
+    }
 
     int ConnectFD = accept(SocketFD, NULL, NULL);
     if (!broadcastFlag) { 
@@ -485,6 +540,49 @@ int main(int argc, char** argv)
     *((int*)(shm_addr + sizeof(int))) = DONE;
 
     //printf("\n************* Task finished! *************\n");
+
+    // Signal NAM that accelerator has finished
+    //   send "fpga" in MsgAccDone2NAM at NAM_HOST_PORT
+				printf("Accelerator done. Sending NAM signals...\n");
+				//fprintf(logf, "Accelerator done. Sending NAM signals...\n");
+    accUCLA::MsgAccDone2NAM doneSignal;
+				doneSignal.set_worker("fpga"); 
+    std::string msgDoneSignal;
+    doneSignal.SerializeToString(&msgDoneSignal);
+
+    struct sockaddr_in client_addr;
+    bzero(&client_addr, sizeof(client_addr));
+    client_addr.sin_family = AF_INET;
+    client_addr.sin_addr.s_addr = htons(INADDR_ANY);
+    client_addr.sin_port = htons(0);
+    
+    int client_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (client_socket < 0) {
+				  printf("Create Socket Failed\n");
+      exit(1);
+    }
+    if(bind(client_socket, (struct sockaddr*)&client_addr, sizeof(client_addr))) {
+				  printf("Create Bind Port Failed\n");
+      exit(1);
+    }
+    
+    struct sockaddr_in server_addr;
+    bzero(&server_addr, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = htons(INADDR_ANY);
+    server_addr.sin_port = htons(ADHOST_NAM_PORT);
+
+    if(connect(client_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+				  printf("Can Not Connect to NAM 6008\n");
+      exit(1);
+    }
+    send_param(client_socket, msgDoneSignal.length());
+    send(client_socket, msgDoneSignal.c_str(), msgDoneSignal.length(), 0);
+				printf("Msg sent...\n");
+
+    // close NAM socket
+    close(client_socket);
+
 
     if (-1 == shutdown(ConnectFD, SHUT_RDWR)) {
       perror("can not shutdown socket");
