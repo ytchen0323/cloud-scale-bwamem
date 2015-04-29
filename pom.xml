@@ -278,6 +278,20 @@
             <artifactId>htsjdk</artifactId>
             <version>1.118</version>
         </dependency>
+        <dependency>
+            <groupId>accUCLA</groupId>
+            <artifactId>util</artifactId>
+            <version>1.0</version>
+            <scope>system</scope>
+            <systemPath>/home/ytchen/incubator/nam/cloud-scale-bwamem-0.1.0/jars/util-1.0.jar</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>accUCLA</groupId>
+            <artifactId>TaskInfo</artifactId>
+            <version>1.0</version>
+            <scope>system</scope>
+            <systemPath>/home/ytchen/incubator/nam/cloud-scale-bwamem-0.1.0/jars/TaskInfo.jar</systemPath>
+        </dependency>
     </dependencies>
 
 </project>

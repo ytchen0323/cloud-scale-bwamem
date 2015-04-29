@@ -27,6 +27,8 @@ import java.io.{FileReader, BufferedReader}
 // JNI function for SWExtend
 import cs.ucla.edu.bwaspark.jni.SWExtendFPGAJNI
 
+// Use NAM functionality
+import accUCLA.accAPI.ACC_requester
 
 object MemChainToAlignBatched {
   val MAX_BAND_TRY = 2    
@@ -548,21 +550,37 @@ object MemChainToAlignBatched {
 	i = i+1
       }
 
+      // In the NAM version, NAM control if we can use FPGA or not
       if (useFPGA == true) {
+        // taskIdx >= threshold: use FPGA
         if (taskIdx >= threshold) {
           //val ret = runOnFPGA(taskIdx, numOfReads, fpgaExtTasks, fpgaExtResults)
-          val ret = runOnFPGAJNI(taskIdx, fpgaExtTasks, fpgaExtResults)
-	}
-	else {
-          i = 0;
+          var workerPort: Int = -1
+          workerPort = ACC_requester.run("bwamem", 0, 1)  // 0: highest priority; partition_size: need to be a number larger than 0
+          // use FPGA
+          if(workerPort != -1) {
+            val ret = runOnFPGAJNI(taskIdx, fpgaExtTasks, fpgaExtResults)
+          }
+          // use CPU (NAM does not give resources to the map task)
+          else {
+            i = 0
+            while (i < taskIdx) {
+                fpgaExtResults(i) = extension(fpgaExtTasks(i))
+                i = i+1
+            }
+          }
+	      }
+        // taskIdx < threshold: use CPU
+        else {
+          i = 0
           while (i < taskIdx) {
               fpgaExtResults(i) = extension(fpgaExtTasks(i))
               i = i+1
           }
-	}
+        }
       }
       else {
-        i = 0;
+        i = 0
         while (i < taskIdx) {
             fpgaExtResults(i) = extension(fpgaExtTasks(i))
             i = i+1
