@@ -46,7 +46,7 @@ create_project -name alphadata_host -dir . -force
 set_property platform vc690-admpcie7v3-1ddr-gen2 [current_project]
 
 # Host Compiler Flags
-set_property -name host_cflags -value "-g -Wall -D FPGA_DEVICE -D C_KERNEL -lrt" -objects [current_project]
+set_property -name host_cflags -value "-g -Wall -D FPGA_DEVICE -D C_KERNEL -lrt -lm" -objects [current_project]
 
 # Host Source Files
 add_files "shm_host.c"

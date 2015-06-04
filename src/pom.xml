@@ -65,7 +65,7 @@
                       </compilerStartOptions>
 
                       <linkerStartOptions>
-                          <linkerStartOption>-shared</linkerStartOption>
+                          <linkerStartOption>-shared -lm</linkerStartOption>
                       </linkerStartOptions>
 
               </configuration>

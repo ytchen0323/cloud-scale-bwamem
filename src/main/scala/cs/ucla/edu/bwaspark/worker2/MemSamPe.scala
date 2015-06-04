@@ -943,6 +943,41 @@ object MemSamPe {
 
 
   /**
+    *  Counting sort
+    *  Goal: reduce the runtime at the sorting stage
+    *
+    *  @param input the input array to be sorted
+    *  @param min the minimum possible value
+    *  @param max the maximum possible value
+    *  @return the sorted array
+    */
+  def countingSort(input: Array[Int], min: Int, max: Int): Array[Int] = {
+    var sorted = new Array[Int](input.size)
+    //var countArray = new Array[Int](max - min + 1)
+    var countArray = new Array[Int](max + 1)
+
+    input.foreach(s => countArray(s) += 1)
+
+    //var countArrayIdx = 0
+    var countArrayIdx = min
+    var sortedIdx = 0
+    //while(countArrayIdx < countArray.size) {
+    while(countArrayIdx <= max) {
+      var i = 0
+      while(i < countArray(countArrayIdx)) {
+        sorted(sortedIdx) = countArrayIdx
+        i += 1
+        sortedIdx += 1
+      }
+ 
+      countArrayIdx += 1
+    }
+
+    assert(sortedIdx == sorted.size)
+    sorted
+  }
+
+  /**
     *  Compute MemPeStat at the driver node.
     *  Used after the required data are collected (reducer).
     *
@@ -968,7 +1003,7 @@ object MemSamPe {
    
     var d = 0
     while(d < 4) {
-      val qInit: Vector[Int] = iSize(d)
+      val qInit = iSize(d).toArray
       if(qInit.size < MIN_DIR_CNT) {
         if(d == 0)
           println("skip orientation FF as there are not enough pairs")
@@ -983,7 +1018,8 @@ object MemSamPe {
       } 
       else {
         println("analyzing insert size distribution for orientation")
-        val q = qInit.sortWith(_.compareTo(_) < 0) // ks_introsort_64
+        //val q = qInit.sortWith(_.compareTo(_) < 0) // ks_introsort_64
+        val q = countingSort(qInit, 1, opt.maxIns) // ks_introsort_64
         var p25: Int = q((0.25 * iSize(d).size + 0.499).toInt)
         var p50: Int = q((0.50 * iSize(d).size + 0.499).toInt)
         var p75: Int = q((0.75 * iSize(d).size + 0.499).toInt)

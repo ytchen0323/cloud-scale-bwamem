@@ -261,6 +261,7 @@ object FastMapProfile {
 
       // loading reads
       println("Load FASTQ files")
+      val startLoadFASTQ = System.currentTimeMillis
       val pairEndFASTQRDDLoader = new FASTQRDDLoader(sc, fastqHDFSInputPath, fastqInputFolderNum)
       val restFolderNum = fastqInputFolderNum - i
       var pairEndFASTQRDD: RDD[PairEndFASTQRecord] = null
@@ -272,6 +273,9 @@ object FastMapProfile {
         pairEndFASTQRDD = pairEndFASTQRDDLoader.PairEndRDDLoadOneBatch(i, restFolderNum)
         i += restFolderNum
       }
+      val endLoadFASTQ = System.currentTimeMillis
+      val loadFASTQTime = endLoadFASTQ - startLoadFASTQ
+      println("Load FASTQ Time: " + loadFASTQTime)
 
       // Worker1 (Map step)
       // *****   PROFILING    *******
@@ -429,19 +433,20 @@ object FastMapProfile {
     printProfiler(swProfile)
     println("Worker1 Time: " + worker1Time)
     println("Calculate Metrics Time: " + calMetricsTime)
-    println("Worker2 Time: " + worker2Time)
-    println("n0 stats")
-    getFPGAProfilingStats("n0", 7000)
-    println("n1 stats")
-    getFPGAProfilingStats("n1", 7000)
-    println("n2 stats")
-    getFPGAProfilingStats("n2", 7000)
-    println("n3 stats")
-    getFPGAProfilingStats("n3", 7000)
-    println("n4 stats")
-    getFPGAProfilingStats("n4", 7000)
-    println("n5 stats")
-    getFPGAProfilingStats("n5", 7000)
+    println("SUCCEED!!!")
+//    println("Worker2 Time: " + worker2Time)
+//    println("n0 stats")
+//    getFPGAProfilingStats("n0", 7000)
+//    println("n1 stats")
+//    getFPGAProfilingStats("n1", 7000)
+//    println("n2 stats")
+//    getFPGAProfilingStats("n2", 7000)
+//    println("n3 stats")
+//    getFPGAProfilingStats("n3", 7000)
+//    println("n4 stats")
+//    getFPGAProfilingStats("n4", 7000)
+//    println("n5 stats")
+//    getFPGAProfilingStats("n5", 7000)
   }
 
 } 

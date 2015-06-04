@@ -19,12 +19,37 @@
 #include <sys/sem.h>
 #include <sys/time.h>
 #include <time.h>
+#include <inttypes.h>
 
 #define NOT_READY 0
 #define DONE 1
 #define FLAG_NUM 2
 
+
+void print_current_time_with_ns (void)
+{
+  long            ns; // Milliseconds
+  time_t          s;  // Seconds
+  struct timespec spec;
+
+  clock_gettime(CLOCK_REALTIME, &spec);
+
+  s  = spec.tv_sec;
+  ns = spec.tv_nsec; // Convert nanoseconds to milliseconds
+
+  printf("Current time: %"PRIdMAX".%09ld seconds since the Epoch\n",
+           (intmax_t)s, ns);
+}
+
+
 int send_int_array(int* int_buf, int buf_size) {
+  // For profiling only
+  //struct timeval  tv;
+  //gettimeofday(&tv, NULL);
+  //double time_in_mill = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ; // convert tv_sec & tv_usec to millisecond
+  //printf("Send time (ms): %lf\n", time_in_mill);
+  print_current_time_with_ns();
+
   // sockets
   struct sockaddr_in stSockAddr;
   int Res;

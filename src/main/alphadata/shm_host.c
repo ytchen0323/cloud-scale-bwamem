@@ -77,6 +77,7 @@ ALL TIMES.
 #include <sys/shm.h>
 #include <sys/sem.h>
 #include <time.h>
+#include <inttypes.h>
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -141,6 +142,20 @@ void collect_timer_stats(
   printTimeSpec(*socRecvTime);
   printTimeSpec(*exeTime);
   printf("**********   end   **********\n\n");
+}
+
+void print_current_time_with_ns (void)
+{
+  long            ns; // Milliseconds
+  //time_t          s;  // Seconds
+  struct timespec spec;
+
+  clock_gettime(CLOCK_REALTIME, &spec);
+
+  //s  = spec.tv_sec;
+  ns = spec.tv_nsec; // Convert nanoseconds to milliseconds
+
+  printf("Current time: %ld nanoseconds since the Epoch\n", ns);
 }
 
 
@@ -370,6 +385,13 @@ int main(int argc, char** argv)
         broadcastFlag = true;
         timer = tic();
     }
+
+    // For profiling only
+    //struct timeval  tv;
+    //gettimeofday(&tv, NULL);    
+    //double time_in_mill = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ; // convert tv_sec & tv_usec to millisecond
+    //printf("Receive time (ms): %lf\n", time_in_mill);
+    print_current_time_with_ns();
 
     accTime (&socListenTime, &timer);
 
