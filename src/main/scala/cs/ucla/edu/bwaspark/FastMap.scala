@@ -28,6 +28,11 @@ import htsjdk.samtools.SAMFileHeader
 import java.io.FileReader
 import java.io.BufferedReader
 
+import scala.concurrent._
+import ExecutionContext.Implicits.global
+import scala.util.{Success, Failure}
+
+
 object FastMap {
   private val MEM_F_PE: Int = 0x2
   private val MEM_F_ALL = 0x8
@@ -319,6 +324,7 @@ object FastMap {
     // Process the reads in a batched fashion
     var i: Int = 0
     var folderID: Int = 0
+    var isSAMWriteDone: Boolean = true  // a done signal for writing SAM file
     while(i < fastqInputFolderNum) {
       
       var pes: Array[MemPeStat] = new Array[MemPeStat](4)
@@ -458,18 +464,42 @@ object FastMap {
  
           if(outputChoice == SAM_OUT_LOCAL) {
             val samStrings = reads.mapPartitions(it2ArrayIt).collect
-            //val samStrings = reads.mapPartitions(it2ArrayIt).flatMap(s => s).map(pairSeq => pairSeq(0) + pairSeq(1)).collect
             println("Count: " + samStrings.size)
             reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
  
-            // Write to the output file in a sequencial way (for now)
-            samStrings.foreach(s => {
-              s.foreach(pairSeq => {
-                samWriter.writeString(pairSeq(0))
-                samWriter.writeString(pairSeq(1))
+            while(!isSAMWriteDone) {
+              Thread.sleep(100)
+            }
+
+            isSAMWriteDone = false
+
+            val f: Future[Int] = future {
+              samStrings.foreach(s => {
+                s.foreach(pairSeq => {
+                  samWriter.writeString(pairSeq(0))
+                  samWriter.writeString(pairSeq(1))
+                } )
               } )
-            } )
-            //samStrings.foreach(s => samWriter.writeString(s))
+              1
+            }
+
+            f onComplete {
+              case Success(s) => {
+                println("[DEBUG] Forked thread, Before: isSAMWriteDone = " + isSAMWriteDone)
+                println("Successfully write the SAM strings to a local file: " + s)
+                isSAMWriteDone = true
+                println("[DEBUG] Forked thread, After: isSAMWriteDone = " + isSAMWriteDone)
+              }
+              case Failure(f) => println("An error has occured: " + f.getMessage)
+            }
+
+            // Write to the output file in a sequencial way (for now)
+           // samStrings.foreach(s => {
+           //   s.foreach(pairSeq => {
+           //     samWriter.writeString(pairSeq(0))
+           //     samWriter.writeString(pairSeq(1))
+           //   } )
+           // } )
           }
           else if(outputChoice == SAM_OUT_DFS) {
             val samStrings = reads.mapPartitions(it2ArrayIt).flatMap(s => s).map(pairSeq => pairSeq(0) + pairSeq(1))
@@ -517,8 +547,14 @@ object FastMap {
       worker2Time += (worker2EndTime - calMetricsEndTime)
     }
 
-    if(outputChoice == SAM_OUT_LOCAL)
+    if(outputChoice == SAM_OUT_LOCAL) {
+      println("[DEBUG] Main thread, Before: isSAMWriteDone = " + isSAMWriteDone)
+      while(!isSAMWriteDone) {
+        Thread.sleep(1000)
+      }
+      println("[DEBUG] Main thread, After: isSAMWriteDone = " + isSAMWriteDone)
       samWriter.close
+    }
     else if(outputChoice == SAM_OUT_DFS)
       samHDFSWriter.close
 
