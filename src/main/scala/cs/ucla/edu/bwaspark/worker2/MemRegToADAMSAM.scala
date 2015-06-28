@@ -161,10 +161,10 @@ object MemRegToADAMSAM {
       aln
     }
     else {
-      val qb = reg.qBeg
-      val qe = reg.qEnd
-      val rb = reg.rBeg
-      val re = reg.rEnd
+      var qb = reg.qBeg
+      var qe = reg.qEnd
+      var rb = reg.rBeg
+      var re = reg.rEnd
 
       if(reg.secondary < 0) 
         aln.mapq = memApproxMapqSe(opt, reg).toShort
@@ -174,7 +174,11 @@ object MemRegToADAMSAM {
       // secondary alignment
       if(reg.secondary >= 0) aln.flag |= 0x100 
 
-      val ret = bwaFixXref2(opt.mat, opt.oDel, opt.eDel, opt.oIns, opt.eIns, opt.w, bns, pac, seq, reg.qBeg, reg.qEnd, reg.rBeg, reg.rEnd)
+      val ret = bwaFixXref2(opt.mat, opt.oDel, opt.eDel, opt.oIns, opt.eIns, opt.w, bns, pac, seq, qb, qe, rb, re)
+      qb = ret._1
+      qe = ret._2
+      rb = ret._3
+      re = ret._4
       val iden = ret._5
       if(iden < 0) {
         println("[Error] If you see this message, please let the developer know. Abort. Sorry.")
@@ -286,7 +290,6 @@ object MemRegToADAMSAM {
       aln.score = reg.score
       if(reg.sub > reg.csub) aln.sub = reg.sub
       else aln.sub = reg.csub
-      
       aln
     }
   }

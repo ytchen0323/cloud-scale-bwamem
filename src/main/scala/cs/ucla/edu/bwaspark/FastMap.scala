@@ -485,15 +485,15 @@ object FastMap {
 
             f onComplete {
               case Success(s) => {
-                println("[DEBUG] Forked thread, Before: isSAMWriteDone = " + isSAMWriteDone)
+                //println("[DEBUG] Forked thread, Before: isSAMWriteDone = " + isSAMWriteDone)
                 println("Successfully write the SAM strings to a local file: " + s)
                 isSAMWriteDone = true
-                println("[DEBUG] Forked thread, After: isSAMWriteDone = " + isSAMWriteDone)
+                //println("[DEBUG] Forked thread, After: isSAMWriteDone = " + isSAMWriteDone)
               }
               case Failure(f) => println("An error has occured: " + f.getMessage)
             }
 
-            // Write to the output file in a sequencial way (for now)
+           // Write to the output file in a sequencial way (old version)
            // samStrings.foreach(s => {
            //   s.foreach(pairSeq => {
            //     samWriter.writeString(pairSeq(0))
@@ -548,11 +548,11 @@ object FastMap {
     }
 
     if(outputChoice == SAM_OUT_LOCAL) {
-      println("[DEBUG] Main thread, Before: isSAMWriteDone = " + isSAMWriteDone)
+      //println("[DEBUG] Main thread, Before: isSAMWriteDone = " + isSAMWriteDone)
       while(!isSAMWriteDone) {
         Thread.sleep(1000)
       }
-      println("[DEBUG] Main thread, After: isSAMWriteDone = " + isSAMWriteDone)
+      //println("[DEBUG] Main thread, After: isSAMWriteDone = " + isSAMWriteDone)
       samWriter.close
     }
     else if(outputChoice == SAM_OUT_DFS)

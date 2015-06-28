@@ -109,8 +109,8 @@ object BNTSeqUtil {
        
         if(posF >= bns.anns(mid).offset) {
           if(mid == bns.n_seqs - 1) isBreak = true
-          if(!isBreak && posF < bns.anns(mid + 1).offset) isBreak = true
-          left = mid + 1
+          else if(posF < bns.anns(mid + 1).offset) isBreak = true
+          if(!isBreak) left = mid + 1
         }
         else
           right = mid

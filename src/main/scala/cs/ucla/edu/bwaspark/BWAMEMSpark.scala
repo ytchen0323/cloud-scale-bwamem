@@ -302,7 +302,7 @@ object BWAMEMSpark {
     
     // environment setup
     if(command == "upload-fastq") {
-      val conf = new SparkConf().setAppName("Cloud-Scale BWAMEM: upload").set("spark.akka.threads", "8").set("spark.logConf", "true")
+      val conf = new SparkConf().setAppName("Cloud-Scale BWAMEM: upload")
       val sc = new SparkContext(conf)
 
       val fastqLoader = new FASTQLocalFileLoader(uploadFASTQArgs.batchedNum)
@@ -316,7 +316,7 @@ object BWAMEMSpark {
       println("Upload FASTQ to HDFS Finished!!!")
     }
     else if(command == "cs-bwamem") {
-      val conf = new SparkConf().setAppName("Cloud-Scale BWAMEM: cs-bwamem").set("spark.logConf", "true")
+      val conf = new SparkConf().setAppName("Cloud-Scale BWAMEM: cs-bwamem")
       val sc = new SparkContext(conf)
       
       memMain(sc, bwamemArgs) 
@@ -327,7 +327,7 @@ object BWAMEMSpark {
       exit(1)
     }
     else if(command == "cs-bwamem-profile") {
-      val conf = new SparkConf().setAppName("Cloud-Scale BWAMEM: cs-bwamem-profile").set("spark.logConf", "true")
+      val conf = new SparkConf().setAppName("Cloud-Scale BWAMEM: cs-bwamem-profile")
       val sc = new SparkContext(conf)
       
       memMainProfile(sc, bwamemArgs) 
@@ -338,14 +338,14 @@ object BWAMEMSpark {
       exit(1)
     }
     else if(command == "merge") {
-      val conf = new SparkConf().setAppName("Cloud-Scale BWAMEM: merge").set("spark.scheduler.maxRegisteredResourcesWaitingTime", "600000").set("spark.executor.heartbeatInterval", "100000").set("spark.storage.memoryFraction", "0.7").set("spark.worker.timeout", "300000").set("spark.akka.timeout", "300000").set("spark.storage.blockManagerHeartBeatMs", "300000").set("spark.akka.retry.wait", "300000").set("spark.akka.frameSize", "1000").set("spark.logConf", "true").set("spark.executor.extraLibraryPath", "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so").set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").set("spark.shuffle.consolidateFiles", "true")
+      val conf = new SparkConf().setAppName("Cloud-Scale BWAMEM: merge").set("spark.scheduler.maxRegisteredResourcesWaitingTime", "600000").set("spark.executor.heartbeatInterval", "100000").set("spark.storage.memoryFraction", "0.7").set("spark.worker.timeout", "300000").set("spark.akka.timeout", "300000").set("spark.storage.blockManagerHeartBeatMs", "300000").set("spark.akka.retry.wait", "300000").set("spark.akka.frameSize", "1000").set("spark.executor.extraLibraryPath", "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so").set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").set("spark.shuffle.consolidateFiles", "true")
       val sc = new SparkContext(conf)
 
       val adamRecords = MergeADAMFiles(sc, sortArgs(0), coalesceFactor)
       adamRecords.adamSave(sortArgs(1))
     }
     else if(command == "sort") {
-      val conf = new SparkConf().setAppName("Cloud-Scale BWAMEM: sort").set("spark.scheduler.maxRegisteredResourcesWaitingTime", "600000").set("spark.executor.heartbeatInterval", "100000").set("spark.storage.memoryFraction", "0.7").set("spark.worker.timeout", "300000").set("spark.akka.timeout", "300000").set("spark.storage.blockManagerHeartBeatMs", "300000").set("spark.akka.retry.wait", "300000").set("spark.akka.frameSize", "1000").set("spark.logConf", "true").set("spark.executor.extraLibraryPath", "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so").set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").set("spark.shuffle.consolidateFiles", "true")
+      val conf = new SparkConf().setAppName("Cloud-Scale BWAMEM: sort").set("spark.scheduler.maxRegisteredResourcesWaitingTime", "600000").set("spark.executor.heartbeatInterval", "100000").set("spark.storage.memoryFraction", "0.7").set("spark.worker.timeout", "300000").set("spark.akka.timeout", "300000").set("spark.storage.blockManagerHeartBeatMs", "300000").set("spark.akka.retry.wait", "300000").set("spark.akka.frameSize", "1000").set("spark.executor.extraLibraryPath", "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so").set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").set("spark.shuffle.consolidateFiles", "true")
       val sc = new SparkContext(conf)
 
       val adamRecords = Sort(sc, sortArgs(0), coalesceFactor)

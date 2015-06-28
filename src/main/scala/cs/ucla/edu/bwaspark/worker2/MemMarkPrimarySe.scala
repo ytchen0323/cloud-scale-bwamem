@@ -30,10 +30,9 @@ object MemMarkPrimarySe {
     if(n != 0) {
       i = 0
       while(i < n) {
-	a(i).sub = 0
-	a(i).secondary = -1
-	a(i).hash = hash64((id + i.toLong))
-	//println("i and hash value is "+ i + " "+ a(i).hash)
+        a(i).sub = 0
+        a(i).secondary = -1
+        a(i).hash = hash64((id + i.toLong))
         i += 1
       }
       //ks_introsort(mem_ars_hash, n, a)
@@ -42,10 +41,10 @@ object MemMarkPrimarySe {
       aVar = a.sortBy(r => (- r.score, r.hash))
       tmp = opt.a + opt.b
       if((opt.oDel + opt.eDel) > tmp) {
-	tmp = opt.oDel + opt.eDel
+        tmp = opt.oDel + opt.eDel
       }
       if((opt.oIns + opt.eIns) > tmp) {
-	tmp = opt.oIns + opt.eIns
+        tmp = opt.oIns + opt.eIns
       }
       //kv_push()
       z(0) = 0
@@ -55,7 +54,7 @@ object MemMarkPrimarySe {
         var breakIdx: Int = zIdx
         var isBreak = false
         k = 0
-        
+       
         while(k < zIdx && !isBreak) {
           j = z(k)
           var bMax: Int = if(aVar(j).qBeg > aVar(i).qBeg) aVar(j).qBeg else aVar(i).qBeg
@@ -76,13 +75,14 @@ object MemMarkPrimarySe {
 
           k += 1
         }
-	if(breakIdx == zIdx) {
+
+        if(breakIdx == zIdx) {
           z(zIdx) = i
           zIdx += 1
         }
-	else {
-	  aVar(i).secondary = z(k)
-	}
+        else {
+          aVar(i).secondary = z(k)
+        }
 
         i += 1
       }
