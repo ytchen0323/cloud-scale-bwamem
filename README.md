@@ -8,12 +8,12 @@ Cloud-scale BWAMEM (CS-BWAMEM) is an ultrafast and highly scalable aligner built
 2. cd cloud-scale-bwamem
 3. ./compile
 
-# Usage
-1. Upload FASTQ file(s) to HDFS
+# Upload FASTQ file(s) to HDFS
   - commands: upload-fastq [-bn INT] isPairEnd filePartitionNum inputFASTQFilePath1 [inputFASTQFilePath2] outFileHDFSPath
   - Required arguments (in the following order):
     
     (1) isPairEnd: 
+      
       1: pair-end
 
       0: single-end (not fully verified yet)
@@ -26,11 +26,15 @@ Cloud-scale BWAMEM (CS-BWAMEM) is an ultrafast and highly scalable aligner built
   - Optional arguments:
     (1) -bn (optional): the number of lines to be read in one batch, which depends on the DRAM you have on the driver node.
 
-2. Use CS-BWAMEM aligner
+# Use CS-BWAMEM aligner
   - commands: cs-bwamem [-bfn INT] [-bPSW (0/1)] [-sbatch INT] [-bPSWJNI (0/1)] [-jniPath STRING] [-oType (0/1/2)] [-oPath STRING] isPairEnd fastaInputPath fastqHDFSInputPath fastqInputFolderNum
   - Required arguments (in the following order):
     
-    (1) isPairEnd: perform pair-end (1) or single-end (0) mapping
+    (1) isPairEnd: 
+      
+        1: pair-end
+
+        0: single-end (not fully verified yet)
     
     (2) fastaInputPath: the path of BWA index files (bns, pac, and so on). This path is locate at local machine instead of HDFS.
     
@@ -50,7 +54,7 @@ Cloud-scale BWAMEM (CS-BWAMEM) is an ultrafast and highly scalable aligner built
     (5) -jniPath (optional): the JNI library path in the local machine
     
     (6) -oChoice (optional): the output format choice
-    
+
         0: no output (pure computation)
     
         1: SAM file output in the local file system (default)
@@ -59,8 +63,10 @@ Cloud-scale BWAMEM (CS-BWAMEM) is an ultrafast and highly scalable aligner built
     
     (7) -oPath (optional): the output path; users need to provide correct path in the local or distributed file system
 
-3. Merge the output ADAM folder pieces and save as a new ADAM file in HDFS
+# Merge the output ADAM folders 
+  - This command merges the output ADAM folders after alignment and then save the output as a new ADAM file in HDFS
   - commands: merge adamHDFSRootInputPath adamHDFSOutputPath
 
-4. Sort the output ADAM folder pieces and save as a new ADAM file in HDFS
+# Sort the output ADAM folders
+  - This commands sorts the output ADAM folders after alignment and then save the output as a new ADAM file in HDFS
   - commands: sort adamHDFSRootInputPath adamHDFSOutputPath
