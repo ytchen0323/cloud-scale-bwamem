@@ -6,7 +6,7 @@ Cloud-scale BWAMEM (CS-BWAMEM) is an ultrafast and highly scalable aligner built
 # Build and Install
 1. git clone git@github.com:ytchen0323/cloud-scale-bwamem.git
 2. cd cloud-scale-bwamem
-3. ./compile
+3. ./compile.pl
 
 # Upload FASTQ file(s) to HDFS
   - commands: upload-fastq [-bn INT] isPairEnd filePartitionNum inputFASTQFilePath1 [inputFASTQFilePath2] outFileHDFSPath
@@ -14,9 +14,9 @@ Cloud-scale BWAMEM (CS-BWAMEM) is an ultrafast and highly scalable aligner built
     
     (1) isPairEnd: 
       
-      1: pair-end
+        1: pair-end
 
-      0: single-end (not fully verified yet)
+        0: single-end (not fully verified yet)
     
     (2) inputFASTQFilePath1: the first input path of the FASTQ file in the local file system (for both single-end and pair-end)
     
