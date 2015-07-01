@@ -1,4 +1,4 @@
-cloud-scale-bwamem
+# Cloud-Scale BWAMEM
 
 # Introduction
 Cloud-scale BWAMEM (CS-BWAMEM) is an ultrafast and highly scalable aligner built on top of cloud infrastructures, including Spark and Hadoop distributed file system (HDFS). It leverages the abundant computing resources in a public or private cloud to fully exploit the parallelism obtained from the enormous number of reads. With CSBWAMEM, the pair-end whole-genome reads (30x) can be aligned within 80 minutes in a 25-node cluster with 300 cores.
