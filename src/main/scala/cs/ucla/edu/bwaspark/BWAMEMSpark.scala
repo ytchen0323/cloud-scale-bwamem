@@ -54,12 +54,11 @@ object BWAMEMSpark {
                                nextOption(map ++ Map('FPGASWExtThreshold -> value.toInt), tail)
         case "-jniSWExtendLibPath" :: value :: tail =>
                                nextOption(map ++ Map('jniSWExtendLibPath -> value.toString), tail)
-        case isPairEnd ::  inFASTAPath :: inFASTQPath :: fastqInputFolderNum :: Nil =>  
+        case isPairEnd ::  inFASTAPath :: inFASTQPath :: Nil =>  
                                nextOption(map ++ 
                                           Map('isPairEnd -> isPairEnd.toInt) ++ 
                                           Map('inFASTAPath -> inFASTAPath) ++
-                                          Map('inFASTQPath -> inFASTQPath) ++
-                                          Map('fastqInputFolderNum -> fastqInputFolderNum.toInt), list.tail.tail.tail.tail)
+                                          Map('inFASTQPath -> inFASTQPath), list.tail.tail.tail)
         case option :: tail => println("[Error] Unknown option " + option) 
                                exit(1) 
       }
@@ -148,10 +147,10 @@ object BWAMEMSpark {
       bwamemArgs.jniSWExtendLibPath = options('jniSWExtendLibPath).toString
     bwamemArgs.fastaInputPath = options('inFASTAPath).toString
     bwamemArgs.fastqHDFSInputPath = options('inFASTQPath).toString
-    bwamemArgs.fastqInputFolderNum = options('fastqInputFolderNum).toString.toInt  
 
-    println("CS- BWAMEM command line arguments: " + bwamemArgs.isPairEnd + " " + bwamemArgs.fastaInputPath + " " + bwamemArgs.fastqHDFSInputPath + " " + bwamemArgs.fastqInputFolderNum + " " + 
-            bwamemArgs.batchedFolderNum + " " + bwamemArgs.isPSWBatched + " " + bwamemArgs.subBatchSize + " " + bwamemArgs.isPSWJNI + " " + bwamemArgs.jniLibPath + " " + bwamemArgs.outputChoice + " " + bwamemArgs.outputPath)
+    println("CS- BWAMEM command line arguments: " + bwamemArgs.isPairEnd + " " + bwamemArgs.fastaInputPath + " " + bwamemArgs.fastqHDFSInputPath + " " + 
+            bwamemArgs.batchedFolderNum + " " + bwamemArgs.isPSWBatched + " " + bwamemArgs.subBatchSize + " " + bwamemArgs.isPSWJNI + " " + bwamemArgs.jniLibPath + " " + 
+            bwamemArgs.outputChoice + " " + bwamemArgs.outputPath)
 
     bwamemArgs
   }
@@ -227,12 +226,11 @@ object BWAMEMSpark {
                       "Optional arguments: \n" +
                       "-bn (optional): the number of lines to be read in one group (batch)\n\n\n" +
                       "Usage 2: use CS-BWAMEM aligner\n" +
-                      "Usage: cs-bwamem [-bfn INT] [-bPSW (0/1)] [-sbatch INT] [-bPSWJNI (0/1)] [-jniPath STRING] [-oType (0/1/2)] [-oPath STRING] [-R STRING] [-isSWExtBatched (0/1)] [-bSWExtSize INT] [-FPGAAcc (0/1)] isPairEnd fastaInputPath fastqHDFSInputPath fastqInputFolderNum\n\n" +
+                      "Usage: cs-bwamem [-bfn INT] [-bPSW (0/1)] [-sbatch INT] [-bPSWJNI (0/1)] [-jniPath STRING] [-oType (0/1/2)] [-oPath STRING] [-R STRING] [-isSWExtBatched (0/1)] [-bSWExtSize INT] [-FPGAAcc (0/1)] isPairEnd fastaInputPath fastqHDFSInputPath\n\n" +
                       "Required arguments (in the following order): \n" +
                       "isPairEnd: perform pair-end (1) or single-end (0) mapping\n" +
                       "fastaInputPath: the path of (local) BWA index files (bns, pac, and so on)\n" +
-                      "fastqHDFSInputPath: the path of the raw read files stored in HDFS\n" +
-                      "fastqInputFolderNum: the number of folders generated in the HDFS for the raw reads\n\n" +
+                      "fastqHDFSInputPath: the path of the raw read files stored in HDFS\n\n" +
                       "Optional arguments: \n" +
                       "-bfn (optional): the number of raw read folders in a batch to be processed\n" +
                       "-bPSW (optional): whether the pair-end Smith Waterman is performed in a batched way\n" + 

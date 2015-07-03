@@ -5,7 +5,7 @@ class BWAMEMCommand {
     var fastqHDFSInputPath: String = ""                // the raw read file stored in HDFS
     var isPairEnd: Boolean = false                     // perform pair-end or single-end mapping
     var fastqInputFolderNum: Int = 0                   // the number of folders generated in the HDFS for the raw reads
-    var batchedFolderNum: Int = 4                      // (optional) the number of raw read folders in a batch to be processed
+    var batchedFolderNum: Int = 4                      // the number of raw read folders in a batch to be processed
     var isPSWBatched: Boolean = true                   // (optional) whether the pair-end Smith Waterman is performed in a batched way
     var subBatchSize: Int = 10                         // (optional) the number of reads to be processed in a subbatch
     var isPSWJNI: Boolean = true                       // (optional) whether the native JNI library is called for better performance

@@ -32,6 +32,10 @@ import scala.concurrent._
 import ExecutionContext.Implicits.global
 import scala.util.{Success, Failure}
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.FileSystem
+import org.apache.hadoop.fs.Path
+import java.net.URI
 
 object FastMap {
   private val MEM_F_PE: Int = 0x2
@@ -54,7 +58,6 @@ object FastMap {
     val fastaLocalInputPath = bwamemArgs.fastaInputPath        // the local BWA index files (bns, pac, and so on)
     val fastqHDFSInputPath = bwamemArgs.fastqHDFSInputPath     // the raw read file stored in HDFS
     val isPairEnd = bwamemArgs.isPairEnd                       // perform pair-end or single-end mapping
-    val fastqInputFolderNum = bwamemArgs.fastqInputFolderNum   // the number of folders generated in the HDFS for the raw reads
     val batchFolderNum = bwamemArgs.batchedFolderNum           // the number of raw read folders in a batch to be processed
     val isPSWBatched = bwamemArgs.isPSWBatched                 // whether the pair-end Smith Waterman is performed in a batched way
     val subBatchSize = bwamemArgs.subBatchSize                 // the number of reads to be processed in a subbatch
@@ -70,6 +73,15 @@ object FastMap {
     var seqDict: SequenceDictionary = null
     var readGroupDict: RecordGroupDictionary = null
     var readGroup: RecordGroup = null
+
+    // get HDFS information
+    val conf: Configuration = new Configuration
+    val hdfs: FileSystem = FileSystem.get(new URI(fastqHDFSInputPath), conf)
+    val status = hdfs.listStatus(new Path(fastqHDFSInputPath))
+    val fastqInputFolderNum = status.size                      // the number of folders generated in the HDFS for the raw reads
+    bwamemArgs.fastqInputFolderNum = fastqInputFolderNum       // the number of folders generated in the HDFS for the raw reads
+    println("HDFS master: " + hdfs.getUri.toString)
+    println("Input HDFS folder number: " + bwamemArgs.fastqInputFolderNum)
 
     if(samHeader.bwaSetReadGroup(readGroupString)) {
       println("Head line: " + samHeader.readGroupLine)
