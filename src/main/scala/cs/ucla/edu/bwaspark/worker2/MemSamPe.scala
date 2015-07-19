@@ -15,6 +15,7 @@ import cs.ucla.edu.bwaspark.worker2.MemMarkPrimarySe.{hash64, memMarkPrimarySe}
 import cs.ucla.edu.bwaspark.worker2.MemRegToADAMSAM._
 import cs.ucla.edu.bwaspark.jni.{MateSWJNI, MateSWType, SeqSWType, RefSWType}
 import cs.ucla.edu.bwaspark.sam.SAMHeader
+import cs.ucla.edu.bwaspark.util.LocusEncode._
 import cs.ucla.edu.avro.fastq._
 
 import org.bdgenomics.formats.avro.AlignmentRecord
@@ -47,22 +48,6 @@ object MemSamPe {
   private val SAM_OUT_FILE = 1
   private val ADAM_OUT = 2
 
-  //pre-process: transform A/C/G/T to 0,1,2,3
-  private def locusEncode(locus: Char): Byte = {
-    //transforming from A/C/G/T to 0,1,2,3
-    locus match {
-      case 'A' => 0
-      case 'a' => 0
-      case 'C' => 1
-      case 'c' => 1
-      case 'G' => 2
-      case 'g' => 2
-      case 'T' => 3
-      case 't' => 3
-      case '-' => 5
-      case _ => 4
-    }
-  }
 
   /**
     *  Calculate the sub-score

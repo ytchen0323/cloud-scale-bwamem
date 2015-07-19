@@ -8,6 +8,7 @@ import cs.ucla.edu.bwaspark.worker1.MemChain._
 import cs.ucla.edu.bwaspark.worker1.MemChainFilter._
 import cs.ucla.edu.bwaspark.worker1.MemChainToAlign._
 import cs.ucla.edu.bwaspark.worker1.MemSortAndDedup._
+import cs.ucla.edu.bwaspark.util.LocusEncode._
 import cs.ucla.edu.avro.fastq._
 
 //this standalone object defines the main job of BWA MEM:
@@ -34,24 +35,6 @@ object BWAMemWorker1 {
                     pes: Array[MemPeStat], //pes array
                     seq: FASTQRecord //a read
                     ): ReadType = { //all possible alignment  
-
-    //pre-process: transform A/C/G/T to 0,1,2,3
-
-    def locusEncode(locus: Char): Byte = {
-      //transforming from A/C/G/T to 0,1,2,3
-      locus match {
-        case 'A' => 0
-        case 'a' => 0
-        case 'C' => 1
-        case 'c' => 1
-        case 'G' => 2
-        case 'g' => 2
-        case 'T' => 3
-        case 't' => 3
-        case '-' => 5
-        case _ => 4
-      }
-    }
 
     val seqStr = new String(seq.getSeq.array)
     val read: Array[Byte] = seqStr.toCharArray.map(ele => locusEncode(ele))

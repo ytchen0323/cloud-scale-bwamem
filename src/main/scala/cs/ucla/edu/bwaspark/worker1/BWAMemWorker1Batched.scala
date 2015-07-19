@@ -8,6 +8,7 @@ import cs.ucla.edu.bwaspark.worker1.MemChain._
 import cs.ucla.edu.bwaspark.worker1.MemChainFilter._
 import cs.ucla.edu.bwaspark.worker1.MemChainToAlignBatched._
 import cs.ucla.edu.bwaspark.worker1.MemSortAndDedup._
+import cs.ucla.edu.bwaspark.util.LocusEncode._
 import cs.ucla.edu.avro.fastq._
 import cs.ucla.edu.bwaspark.debug.DebugFlag._
 
@@ -40,24 +41,6 @@ object BWAMemWorker1Batched {
 			   runOnFPGA: Boolean, //if run on FPGA
 			   threshold: Int //the batch threshold to run on FPGA
                            ): Array[ReadType] = { //all possible alignments for all the reads  
-
-    //pre-process: transform A/C/G/T to 0,1,2,3
-
-    def locusEncode(locus: Char): Byte = {
-      //transforming from A/C/G/T to 0,1,2,3
-      locus match {
-        case 'A' => 0
-        case 'a' => 0
-        case 'C' => 1
-        case 'c' => 1
-        case 'G' => 2
-        case 'g' => 2
-        case 'T' => 3
-        case 't' => 3
-        case '-' => 5
-        case _ => 4
-      }
-    }
 
       val readArray = new Array[Array[Byte]](numOfReads)
       val lenArray = new Array[Int](numOfReads)

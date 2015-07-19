@@ -7,6 +7,7 @@ import cs.ucla.edu.bwaspark.worker2.MemMarkPrimarySe._
 import cs.ucla.edu.bwaspark.worker2.MemRegToADAMSAM._
 import cs.ucla.edu.bwaspark.worker2.MemSamPe._
 import cs.ucla.edu.bwaspark.sam.SAMHeader
+import cs.ucla.edu.bwaspark.util.LocusEncode._
 import cs.ucla.edu.avro.fastq._
 
 import org.bdgenomics.formats.avro.AlignmentRecord
@@ -14,25 +15,6 @@ import org.bdgenomics.adam.models.{SequenceDictionary, RecordGroup}
 
 object BWAMemWorker2 {
   private val MEM_F_PE: Int = 0x2
-
-  
-  //pre-process: transform A/C/G/T to 0,1,2,3
-  private def locusEncode(locus: Char): Byte = {
-    //transforming from A/C/G/T to 0,1,2,3
-    locus match {
-      case 'A' => 0
-      case 'a' => 0
-      case 'C' => 1
-      case 'c' => 1
-      case 'G' => 2
-      case 'g' => 2
-      case 'T' => 3
-      case 't' => 3
-      case '-' => 5
-      case _ => 4
-    }
-  }
-
 
   /**
     *  BWA-MEM Worker 2: used for single-end alignment
