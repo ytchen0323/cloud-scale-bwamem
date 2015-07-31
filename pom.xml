@@ -271,7 +271,7 @@
         </dependency>
         <dependency>
             <groupId>org.bdgenomics.adam</groupId>
-            <artifactId>adam-core</artifactId>
+            <artifactId>adam-core</artifactId> 
             <version>0.14.0</version>
         </dependency>
         <dependency>

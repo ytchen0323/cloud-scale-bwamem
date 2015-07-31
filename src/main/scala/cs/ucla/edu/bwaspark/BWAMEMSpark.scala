@@ -208,7 +208,7 @@ object BWAMEMSpark {
  
   private def sortADAMCmdLineParser(argsList: List[String]): List[String] = {
     val parseList: List[String] = argsList match {
-      case inputPath :: outputPath :: Nil => List(inputPath, outputPath)
+      case fsServerAddr :: inputPath :: outputPath :: Nil => List(fsServerAddr, inputPath, outputPath)
       case _ => println("Unknown command lines arguments")
                 exit(1)
     }
@@ -254,9 +254,9 @@ object BWAMEMSpark {
                       "-FPGASWExtThreshold (optional): the threshold of using FPGA accelerator for SWExtend.\n" + 
                       "    If the nubmer of seed in one step is larger than this threshold, FPGA acceleration will be applied. Otherwise, CPU is used for computation.\n\n\n" +
                       "Usage 3: merge the output ADAM folder pieces and save as a new ADAM file in HDFS\n" +
-                      "Usage: merge adamHDFSRootInputPath adamHDFSOutputPath\n\n\n" +
+                      "Usage: merge hdfsServerAddress adamHDFSRootInputPath adamHDFSOutputPath\n\n\n" +
                       "Usage 4: sort the output ADAM folder pieces and save as a new ADAM file in HDFS\n" +
-                      "Usage: sort adamHDFSRootInputPath adamHDFSOutputPath\n"
+                      "Usage: sort hdfsServerAddress adamHDFSRootInputPath adamHDFSOutputPath\n"
 
 
   private def commandLineParser(arg: String): String = {
@@ -336,18 +336,18 @@ object BWAMEMSpark {
       exit(1)
     }
     else if(command == "merge") {
-      val conf = new SparkConf().setAppName("Cloud-Scale BWAMEM: merge").set("spark.scheduler.maxRegisteredResourcesWaitingTime", "600000").set("spark.executor.heartbeatInterval", "100000").set("spark.storage.memoryFraction", "0.7").set("spark.worker.timeout", "300000").set("spark.akka.timeout", "300000").set("spark.storage.blockManagerHeartBeatMs", "300000").set("spark.akka.retry.wait", "300000").set("spark.akka.frameSize", "1000").set("spark.executor.extraLibraryPath", "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so").set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").set("spark.shuffle.consolidateFiles", "true")
+      val conf = new SparkConf().setAppName("Cloud-Scale BWAMEM: merge").set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").set("spark.shuffle.consolidateFiles", "true")
       val sc = new SparkContext(conf)
 
-      val adamRecords = MergeADAMFiles(sc, sortArgs(0), coalesceFactor)
-      adamRecords.adamSave(sortArgs(1))
+      val adamRecords = MergeADAMFiles(sc, sortArgs(0), sortArgs(1), coalesceFactor)
+      adamRecords.adamSave(sortArgs(2))
     }
     else if(command == "sort") {
-      val conf = new SparkConf().setAppName("Cloud-Scale BWAMEM: sort").set("spark.scheduler.maxRegisteredResourcesWaitingTime", "600000").set("spark.executor.heartbeatInterval", "100000").set("spark.storage.memoryFraction", "0.7").set("spark.worker.timeout", "300000").set("spark.akka.timeout", "300000").set("spark.storage.blockManagerHeartBeatMs", "300000").set("spark.akka.retry.wait", "300000").set("spark.akka.frameSize", "1000").set("spark.executor.extraLibraryPath", "/home/ytchen/incubator/cloud-scale-bwamem-0.1.0/target/jniNative.so").set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").set("spark.shuffle.consolidateFiles", "true")
+      val conf = new SparkConf().setAppName("Cloud-Scale BWAMEM: sort").set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").set("spark.shuffle.consolidateFiles", "true")
       val sc = new SparkContext(conf)
 
-      val adamRecords = Sort(sc, sortArgs(0), coalesceFactor)
-      adamRecords.adamSave(sortArgs(1))
+      val adamRecords = Sort(sc, sortArgs(0), sortArgs(1), coalesceFactor)
+      adamRecords.adamSave(sortArgs(2))
     }
 
   } 
