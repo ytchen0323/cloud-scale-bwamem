@@ -427,6 +427,18 @@ object FastMap {
         j += 1
       }
         
+      // Check if the I/O thread has completed writing the output SAM file
+      // If not, wait here!!!
+      println("[DEBUG] Forked thread, Before: isSAMWriteDone = " + isSAMWriteDone)
+
+      while(!isSAMWriteDone) {
+        Thread.sleep(1000)
+        println("Waiting for I/O")
+      }
+
+      isSAMWriteDone = false
+      println("[DEBUG] Forked thread, After: isSAMWriteDone = " + isSAMWriteDone)
+
       // Worker2 (Map step)
       // NOTE: we may need to find how to utilize the numProcessed variable!!!
       // Batched Processing for P-SW kernel
@@ -475,16 +487,19 @@ object FastMap {
           }
  
           if(outputChoice == SAM_OUT_LOCAL) {
+            // Check if the I/O thread has completed writing the output SAM file
+            // If not, wait here!!!
+            //while(!isSAMWriteDone) {
+            //  Thread.sleep(1000)
+            //  println("Waiting for I/O")
+            //}
+
+            //isSAMWriteDone = false
+
             val samStrings = reads.mapPartitions(it2ArrayIt).collect
             println("Count: " + samStrings.size)
             reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
  
-            while(!isSAMWriteDone) {
-              Thread.sleep(100)
-            }
-
-            isSAMWriteDone = false
-
             val f: Future[Int] = future {
               samStrings.foreach(s => {
                 s.foreach(pairSeq => {
