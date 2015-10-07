@@ -64,7 +64,7 @@ object FastMap {
   private val MEM_F_PE: Int = 0x2
   private val MEM_F_ALL = 0x8
   private val MEM_F_NO_MULTI = 0x10
-  private val packageVersion = "cloud-scale-bwamem-0.1.0"
+  private val packageVersion = "cloud-scale-bwamem-0.2.0"
   private val NO_OUT_FILE = 0
   private val SAM_OUT_LOCAL = 1
   private val ADAM_OUT = 2
@@ -198,14 +198,13 @@ object FastMap {
     }
 
     // broadcast shared variables
-    //val bwaIdxGlobal = sc.broadcast(bwaIdx, fastaLocalInputPath)  // read from local disks!!!
-    //val bwaIdxGlobal = sc.broadcast(bwaIdx)  // broadcast
-    // test!!!
+    // If each node has its own copy of human reference genome, we can bypass the broadcast from the driver node.
+    // Otherwise, we need to use Spark broadcast
     var isLocalRef = false
     if(bwamemArgs.localRef == 1) 
       isLocalRef = true
     val bwaIdxGlobal = sc.broadcast(new ReferenceBroadcast(sc.broadcast(bwaIdx), isLocalRef, fastaLocalInputPath))
-    //val bwaIdxGlobal = sc.broadcast(new ReferenceBroadcast(sc.broadcast(bwaIdx), true, fastaLocalInputPath, -1))
+
     val bwaMemOptGlobal = sc.broadcast(bwaMemOpt)
 
     // Used to avoid time consuming adamRDD.count (numProcessed += adamRDD.count)

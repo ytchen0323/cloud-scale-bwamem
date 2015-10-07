@@ -2,7 +2,7 @@
     <groupId>cs.ucla.edu</groupId>
     <artifactId>cloud-scale-bwamem</artifactId>
     <modelVersion>4.0.0</modelVersion>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
     <packaging>jar</packaging>
     <name>Cloud-Scale-BWAMEM</name>
 
