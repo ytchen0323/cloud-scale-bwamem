@@ -318,22 +318,25 @@ object FastMap {
         
       // Check if the I/O thread has completed writing the output SAM file
       // If not, wait here!!!
-      println("[DEBUG] Main thread, Before while loop: isSAMWriteDone = " + isSAMWriteDone)
+      if(outputChoice == SAM_OUT_LOCAL) {
+        println("[DEBUG] Main thread, Before while loop: isSAMWriteDone = " + isSAMWriteDone)
 
-      while(!isSAMWriteDone) {
-        try {
-          println("Waiting for I/O")
-          Thread.sleep(1000)                 //1000 milliseconds is one second.
-        } catch {
-          case e: InterruptedException => Thread.currentThread().interrupt()
+        while(!isSAMWriteDone) {
+          try {
+            println("Waiting for I/O")
+            Thread.sleep(1000)                 //1000 milliseconds is one second.
+          } catch {
+            case e: InterruptedException => Thread.currentThread().interrupt()
+          }
         }
-      }
 
-      println("[DEBUG] Main thread, After while loop: isSAMWriteDone = " + isSAMWriteDone)
-      this.synchronized {
-        isSAMWriteDone = false
+        println("[DEBUG] Main thread, After while loop: isSAMWriteDone = " + isSAMWriteDone)
+        this.synchronized {
+          isSAMWriteDone = false
+        }
+        println("[DEBUG] Main thread, Final value: isSAMWriteDone = " + isSAMWriteDone)
+
       }
-      println("[DEBUG] Main thread, Final value: isSAMWriteDone = " + isSAMWriteDone)
 
       // Worker2 (Map step)
       // NOTE: we may need to find how to utilize the numProcessed variable!!!
@@ -383,7 +386,29 @@ object FastMap {
           }
  
           if(outputChoice == SAM_OUT_LOCAL) {
+            println("@worker2")
             val samStrings = reads.mapPartitions(it2ArrayIt).collect
+            println("worker2 done!")
+
+            // test
+            /*println("[DEBUG] Main thread, Before while loop: isSAMWriteDone = " + isSAMWriteDone)
+
+            while(!isSAMWriteDone) {
+              try {
+                println("Waiting for I/O")
+                Thread.sleep(1000)                 //1000 milliseconds is one second.
+              } catch {
+                case e: InterruptedException => Thread.currentThread().interrupt()
+              }
+            }
+
+            println("[DEBUG] Main thread, After while loop: isSAMWriteDone = " + isSAMWriteDone)
+            this.synchronized {
+              isSAMWriteDone = false
+            }
+            println("[DEBUG] Main thread, Final value: isSAMWriteDone = " + isSAMWriteDone)*/
+            // end of test
+
             println("Count: " + samStrings.size)
             reads.unpersist(true)   // free RDD; seems to be needed (free storage information is wrong)
  
@@ -424,14 +449,6 @@ object FastMap {
               case Failure(f) => println("An error has occured: " + f.getMessage)
             }
 
-           // Write to the output file in a sequencial way (old version)
-           // samStrings.foreach(s => {
-           //   s.foreach(pairSeq => {
-           //     samWriter.writeString(pairSeq(0))
-           //     samWriter.writeString(pairSeq(1))
-           //   } )
-           // } )
-            
             /*if(isFinalIteration) {
               println("Main thread: waiting for closing samWriter (wait for at most 1000 seconds)")
               Await.result(f, 1000.second)
