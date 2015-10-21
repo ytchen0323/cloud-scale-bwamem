@@ -318,7 +318,9 @@ object FastMap {
         
       // Check if the I/O thread has completed writing the output SAM file
       // If not, wait here!!!
-      if(outputChoice == SAM_OUT_LOCAL) {
+      // This implementation use only worker1 stage to hide the I/O latency
+      // It is slower but consume less memory footprint
+      /*if(outputChoice == SAM_OUT_LOCAL) {
         println("[DEBUG] Main thread, Before while loop: isSAMWriteDone = " + isSAMWriteDone)
 
         while(!isSAMWriteDone) {
@@ -336,7 +338,7 @@ object FastMap {
         }
         println("[DEBUG] Main thread, Final value: isSAMWriteDone = " + isSAMWriteDone)
 
-      }
+      }*/
 
       // Worker2 (Map step)
       // NOTE: we may need to find how to utilize the numProcessed variable!!!
@@ -390,8 +392,11 @@ object FastMap {
             val samStrings = reads.mapPartitions(it2ArrayIt).collect
             println("worker2 done!")
 
+            // This implementation can hide the I/O latency with both worker1 and worker2 stages
+            // However, it requires 2X memory footprint on the driver node 
+            // The program will crash if the memory (Java heap) on the driver node is not large enough
             // test
-            /*println("[DEBUG] Main thread, Before while loop: isSAMWriteDone = " + isSAMWriteDone)
+            println("[DEBUG] Main thread, Before while loop: isSAMWriteDone = " + isSAMWriteDone)
 
             while(!isSAMWriteDone) {
               try {
@@ -406,7 +411,7 @@ object FastMap {
             this.synchronized {
               isSAMWriteDone = false
             }
-            println("[DEBUG] Main thread, Final value: isSAMWriteDone = " + isSAMWriteDone)*/
+            println("[DEBUG] Main thread, Final value: isSAMWriteDone = " + isSAMWriteDone)
             // end of test
 
             println("Count: " + samStrings.size)
