@@ -64,7 +64,7 @@ object FastMap {
   private val MEM_F_PE: Int = 0x2
   private val MEM_F_ALL = 0x8
   private val MEM_F_NO_MULTI = 0x10
-  private val packageVersion = "cloud-scale-bwamem-0.2.0"
+  private val packageVersion = "cloud-scale-bwamem-0.2.1"
   private val NO_OUT_FILE = 0
   private val SAM_OUT_LOCAL = 1
   private val ADAM_OUT = 2
