@@ -488,7 +488,7 @@ object FastMap {
  
           //val adamObjRDD = sc.union(reads.mapPartitions(it2ArrayIt))
           val adamObjRDD = reads.mapPartitions(it2ArrayIt).flatMap(r => r)
-          adamObjRDD.adamSave(outputPath + "/"  + folderID.toString())
+          adamObjRDD.adamParquetSave(outputPath + "/"  + folderID.toString())
           println("@Worker2: Completed")
           numProcessed += batchedReadNum
           folderID += 1
@@ -670,7 +670,7 @@ object FastMap {
                                        .flatMap(r => singleEndBwaMemWorker2ADAMOut(bwaMemOptGlobal.value, r.regs, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 
                                                                                    r.seq, numProcessed, samHeader, seqDict, readGroup) )
                                           
-        adamRDD.adamSave(outputPath + "/"  + folderID.toString())
+        adamRDD.adamParquetSave(outputPath + "/"  + folderID.toString())
         numProcessed += batchedReadNum
         folderID += 1
 

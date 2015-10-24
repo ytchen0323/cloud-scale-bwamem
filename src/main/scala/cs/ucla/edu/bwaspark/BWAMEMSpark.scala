@@ -322,14 +322,14 @@ object BWAMEMSpark {
       val sc = new SparkContext(conf)
 
       val adamRecords = MergeADAMFiles(sc, sortArgs(0), sortArgs(1), coalesceFactor)
-      adamRecords.adamSave(sortArgs(2))
+      adamRecords.adamParquetSave(sortArgs(2))
     }
     else if(command == "sort") {
       val conf = new SparkConf().setAppName("Cloud-Scale BWAMEM: sort").set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").set("spark.shuffle.consolidateFiles", "true")
       val sc = new SparkContext(conf)
 
       val adamRecords = Sort(sc, sortArgs(0), sortArgs(1), coalesceFactor)
-      adamRecords.adamSave(sortArgs(2))
+      adamRecords.adamParquetSave(sortArgs(2))
     }
 
   } 

@@ -41,14 +41,13 @@ import scala.concurrent.duration._
 
 import cs.ucla.edu.avro.fastq._
 
-import parquet.hadoop.ParquetOutputFormat
-import parquet.avro.AvroParquetOutputFormat
 import org.apache.hadoop.mapreduce.Job
-import parquet.hadoop.util.ContextUtil
-import parquet.hadoop.metadata.CompressionCodecName
+import org.apache.parquet.hadoop.ParquetOutputFormat
+import org.apache.parquet.avro.AvroParquetOutputFormat
+import org.apache.parquet.hadoop.util.ContextUtil
+import org.apache.parquet.hadoop.metadata.CompressionCodecName
 
 import java.util.logging.{Level, Logger}
-import java.nio.charset.CharsetEncoder
 
 // batchedLineNum: the number of reads processed each time
 class FASTQLocalFileLoader(batchedLineNum: Int) {
@@ -176,7 +175,7 @@ class FASTQLocalFileLoader(batchedLineNum: Int) {
         AvroParquetOutputFormat.setSchema(job, cs.ucla.edu.avro.fastq.FASTQRecord.SCHEMA$)
         // Save the RDD to a Parquet file in our temporary output directory
         val outputPath = outFileRootPath + "/"  + i.toString();
-        pairRDD.saveAsNewAPIHadoopFile(outputPath, classOf[Void], classOf[FASTQRecord], classOf[AvroParquetOutputFormat], ContextUtil.getConfiguration(job))
+        pairRDD.saveAsNewAPIHadoopFile(outputPath, classOf[Void], classOf[FASTQRecord], classOf[AvroParquetOutputFormat[FASTQRecord]], ContextUtil.getConfiguration(job))
 
         i += 1
       }
@@ -504,6 +503,7 @@ class FASTQLocalFileLoader(batchedLineNum: Int) {
           val job = new Job(pairRDD.context.hadoopConfiguration)
 
           // Configure the ParquetOutputFormat to use Avro as the serialization format
+          //ParquetOutputFormat.setWriteSupportClass(job, classOf[AvroWriteSupport[PairEndFASTQRecord]])
           //ParquetOutputFormat.setCompression(job, CompressionCodecName.GZIP)
           ParquetOutputFormat.setCompression(job, CompressionCodecName.UNCOMPRESSED)
           ParquetOutputFormat.setEnableDictionary(job, true)
@@ -514,7 +514,8 @@ class FASTQLocalFileLoader(batchedLineNum: Int) {
           AvroParquetOutputFormat.setSchema(job, cs.ucla.edu.avro.fastq.PairEndFASTQRecord.SCHEMA$)
           // Save the RDD to a Parquet file in our temporary output directory
           val outputPath = outFileRootPath + "/"  + i.toString();
-          pairRDD.saveAsNewAPIHadoopFile(outputPath, classOf[Void], classOf[PairEndFASTQRecord], classOf[AvroParquetOutputFormat], ContextUtil.getConfiguration(job))
+          pairRDD.saveAsNewAPIHadoopFile(outputPath, classOf[Void], classOf[PairEndFASTQRecord], classOf[AvroParquetOutputFormat[PairEndFASTQRecord]], ContextUtil.getConfiguration(job))
+          //pairRDD.saveAsNewAPIHadoopFile(outputPath, classOf[Void], classOf[PairEndFASTQRecord], classOf[AvroParquetOutputFormat[Void, PairEndFASTQRecord]], ContextUtil.getConfiguration(job))
           i += 1
           1
         }

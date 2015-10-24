@@ -1059,8 +1059,8 @@ object MemRegToADAMSAM {
     if((alnTmp.flag & 0x8) == 0 && (alnMateTmp != null))
       builder.setMateMapped(true)                                             // Bit: 0x8
     if((alnTmp.flag & 0x20) > 0) builder.setMateNegativeStrand(true)          // Bit: 0x20
-    if((alnTmp.flag & 0x40) > 0) builder.setFirstOfPair(true)                 // Bit: 0x40
-    if((alnTmp.flag & 0x80) > 0) builder.setSecondOfPair(true)                // Bit: 0x80
+    //if((alnTmp.flag & 0x40) > 0) builder.setFirstOfPair(true)                 // Bit: 0x40  // In ADAM bdg-format 0.6.1, this field has been removed (was supported in 0.2.0)
+    //if((alnTmp.flag & 0x80) > 0) builder.setSecondOfPair(true)                // Bit: 0x80  // In ADAM bdg-format 0.6.1, this field has been removed (was supported in 0.2.0)
     if((alnTmp.flag & 0x200) > 0) builder.setFailedVendorQualityChecks(true)  // Bit: 0x200
     if((alnTmp.flag & 0x400) > 0) builder.setDuplicateRead(true)              // Bit: 0x400
     
