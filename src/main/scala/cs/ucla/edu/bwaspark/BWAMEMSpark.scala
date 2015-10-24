@@ -292,6 +292,7 @@ object BWAMEMSpark {
       else
         fastqLoader.storePairEndFASTQInHDFS(sc, uploadFASTQArgs.inputFASTQFilePath1, uploadFASTQArgs.inputFASTQFilePath2, uploadFASTQArgs.outFileHDFSPath, uploadFASTQArgs.filePartitionNum)
 
+      println("I/O (Write to HDFS) waiting time: " + fastqLoader.ioWaitingTime)
       println("Upload FASTQ to HDFS Finished!!!")
     }
     else if(command == "cs-bwamem") {

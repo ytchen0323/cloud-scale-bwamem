@@ -53,6 +53,7 @@ import java.nio.charset.CharsetEncoder
 // batchedLineNum: the number of reads processed each time
 class FASTQLocalFileLoader(batchedLineNum: Int) {
   var isEOF = false
+  var ioWaitingTime = 0
 
   /**
     *  Read the FASTQ file from a local directory 
@@ -486,6 +487,7 @@ class FASTQLocalFileLoader(batchedLineNum: Int) {
         while(!isHDFSWriteDone) {
           try {
             println("Waiting for I/O")
+            ioWaitingTime += 1
             Thread.sleep(1000)   // sleep for one second
           } catch {
             case e: InterruptedException => Thread.currentThread.interrupt

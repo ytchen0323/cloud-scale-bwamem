@@ -341,6 +341,7 @@ object FastMap {
       }*/
 
       // Worker2 (Map step)
+      println("@Worker2: Started")
       // NOTE: we may need to find how to utilize the numProcessed variable!!!
       // Batched Processing for P-SW kernel
       if(isPSWBatched) {
@@ -488,6 +489,7 @@ object FastMap {
           //val adamObjRDD = sc.union(reads.mapPartitions(it2ArrayIt))
           val adamObjRDD = reads.mapPartitions(it2ArrayIt).flatMap(r => r)
           adamObjRDD.adamSave(outputPath + "/"  + folderID.toString())
+          println("@Worker2: Completed")
           numProcessed += batchedReadNum
           folderID += 1
           reads.unpersist(true)
