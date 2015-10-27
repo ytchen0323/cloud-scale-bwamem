@@ -2,7 +2,7 @@
     <groupId>cs.ucla.edu</groupId>
     <artifactId>cloud-scale-bwamem</artifactId>
     <modelVersion>4.0.0</modelVersion>
-    <version>0.2.1</version>
+    <version>0.2.2</version>
     <packaging>jar</packaging>
     <name>Cloud-Scale-BWAMEM</name>
 
@@ -12,7 +12,7 @@
         <scala.artifact.suffix>2.10</scala.artifact.suffix>
         <avro.version>1.7.6</avro.version>
         <spark.version>1.5.1</spark.version>
-        <parquet.version>1.6.0</parquet.version>
+        <parquet.version>1.8.1</parquet.version>
         <!-- Edit the following line to configure the Hadoop (HDFS) version. -->
         <hadoop.version>2.5.2</hadoop.version>
     </properties>
@@ -250,6 +250,7 @@
             <!-- <systemPath>/cdsc_nfs/cdsc0/software/spark/spark-1.2.1/assembly/target/scala-2.10/spark-assembly-1.2.1-hadoop2.5.2.jar</systemPath> -->
             <!-- <systemPath>/cluster/spark/spark-1.3.1-bin-hadoop2.4/lib/spark-assembly-1.3.1-hadoop2.4.0.jar</systemPath> -->
             <systemPath>/cluster/spark/spark-1.5.1-bin-hadoop2.4/lib/spark-assembly-1.5.1-hadoop2.4.0.jar</systemPath>
+            <!-- <systemPath>/cluster/spark/spark-1.4.1-bin-hadoop2.4/lib/spark-assembly-1.4.1-hadoop2.4.0.jar</systemPath> -->
             <exclusions>
               <exclusion>
                 <groupId>org.apache.hadoop</groupId>
@@ -267,12 +268,17 @@
             <version>${avro.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.twitter</groupId>
+            <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-avro</artifactId>
             <version>${parquet.version}</version>
         </dependency>        
         <dependency>
             <groupId>com.twitter</groupId>
+            <artifactId>parquet-avro</artifactId>
+            <version>1.6.0</version>
+        </dependency>        
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-scala_2.10</artifactId>
             <version>${parquet.version}</version>
             <exclusions>
