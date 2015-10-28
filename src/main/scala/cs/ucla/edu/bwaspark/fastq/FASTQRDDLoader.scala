@@ -26,11 +26,11 @@ import scala.List
 
 import cs.ucla.edu.avro.fastq._
 
-import parquet.hadoop.ParquetInputFormat
-import parquet.avro.{AvroParquetInputFormat, AvroReadSupport}
 import org.apache.hadoop.mapreduce.Job
-import parquet.hadoop.util.ContextUtil
-import parquet.filter.UnboundRecordFilter
+import org.apache.parquet.hadoop.ParquetInputFormat
+import org.apache.parquet.avro.{AvroParquetInputFormat, AvroReadSupport}
+import org.apache.parquet.hadoop.util.ContextUtil
+import org.apache.parquet.filter.UnboundRecordFilter
 
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.fs.FileSystem

@@ -64,7 +64,7 @@ object FastMap {
   private val MEM_F_PE: Int = 0x2
   private val MEM_F_ALL = 0x8
   private val MEM_F_NO_MULTI = 0x10
-  private val packageVersion = "cloud-scale-bwamem-0.2.1"
+  private val packageVersion = "cloud-scale-bwamem-0.2.2"
   private val NO_OUT_FILE = 0
   private val SAM_OUT_LOCAL = 1
   private val ADAM_OUT = 2
@@ -218,6 +218,7 @@ object FastMap {
     var worker1Time: Long = 0
     var calMetricsTime: Long = 0
     var worker2Time: Long = 0
+    var ioWaitingTime: Long = 0
 
     var numProcessed: Long = 0
     // Process the reads in a batched fashion
@@ -326,6 +327,7 @@ object FastMap {
         while(!isSAMWriteDone) {
           try {
             println("Waiting for I/O")
+            ioWaitingTime += 1
             Thread.sleep(1000)                 //1000 milliseconds is one second.
           } catch {
             case e: InterruptedException => Thread.currentThread().interrupt()
@@ -402,6 +404,7 @@ object FastMap {
             while(!isSAMWriteDone) {
               try {
                 println("Waiting for I/O")
+                ioWaitingTime += 1
                 Thread.sleep(1000)                 //1000 milliseconds is one second.
               } catch {
                 case e: InterruptedException => Thread.currentThread().interrupt()
@@ -488,7 +491,7 @@ object FastMap {
  
           //val adamObjRDD = sc.union(reads.mapPartitions(it2ArrayIt))
           val adamObjRDD = reads.mapPartitions(it2ArrayIt).flatMap(r => r)
-          adamObjRDD.adamSave(outputPath + "/"  + folderID.toString())
+          adamObjRDD.adamParquetSave(outputPath + "/"  + folderID.toString())
           println("@Worker2: Completed")
           numProcessed += batchedReadNum
           folderID += 1
@@ -514,6 +517,7 @@ object FastMap {
       while(!isSAMWriteDone) {
         try {
           println("Waiting for I/O, at final iteration")
+          ioWaitingTime += 1
           Thread.sleep(1000)                 //1000 milliseconds is one second.
         } catch {
           case e: InterruptedException => Thread.currentThread().interrupt()
@@ -540,6 +544,7 @@ object FastMap {
     println("Worker1 Time: " + worker1Time)
     println("Calculate Metrics Time: " + calMetricsTime)
     println("Worker2 Time: " + worker2Time)
+    println("I/O waiting time for writing data to the disk (for local SAM format only): " + ioWaitingTime)
     sc.stop
   }
 
@@ -670,7 +675,7 @@ object FastMap {
                                        .flatMap(r => singleEndBwaMemWorker2ADAMOut(bwaMemOptGlobal.value, r.regs, bwaIdxGlobal.value.bns, bwaIdxGlobal.value.pac, 
                                                                                    r.seq, numProcessed, samHeader, seqDict, readGroup) )
                                           
-        adamRDD.adamSave(outputPath + "/"  + folderID.toString())
+        adamRDD.adamParquetSave(outputPath + "/"  + folderID.toString())
         numProcessed += batchedReadNum
         folderID += 1
 
