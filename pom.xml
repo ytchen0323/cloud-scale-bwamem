@@ -246,11 +246,6 @@
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-core_${scala.artifact.suffix}</artifactId>
             <version>${spark.version}</version>
-            <scope>system</scope>
-            <!-- <systemPath>/cdsc_nfs/cdsc0/software/spark/spark-1.2.1/assembly/target/scala-2.10/spark-assembly-1.2.1-hadoop2.5.2.jar</systemPath> -->
-            <!-- <systemPath>/cluster/spark/spark-1.3.1-bin-hadoop2.4/lib/spark-assembly-1.3.1-hadoop2.4.0.jar</systemPath> -->
-            <systemPath>/cluster/spark/spark-1.5.1-bin-hadoop2.4/lib/spark-assembly-1.5.1-hadoop2.4.0.jar</systemPath>
-            <!-- <systemPath>/cluster/spark/spark-1.4.1-bin-hadoop2.4/lib/spark-assembly-1.4.1-hadoop2.4.0.jar</systemPath> -->
             <exclusions>
               <exclusion>
                 <groupId>org.apache.hadoop</groupId>
