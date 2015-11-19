@@ -1990,11 +1990,11 @@ object MemSamPe {
     }
 
     val mateSWArray = mateSWVec.toArray
-    println("mateSWArray size: " + mateSWArray.size)
+    //println("mateSWArray size: " + mateSWArray.size)
     val seqsSWArray = seqsSWVec.toArray
-    println("seqsSWArray size: " + seqsSWArray.size)
+    //println("seqsSWArray size: " + seqsSWArray.size)
     val refSWArray = refSWVec.toArray
-    println("refSWArray size: " + refSWArray.size)
+    //println("refSWArray size: " + refSWArray.size)
 
     (mateSWArray, seqsSWArray, refSWArray, refSWArraySize)
   }

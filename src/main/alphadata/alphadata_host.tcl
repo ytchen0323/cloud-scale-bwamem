@@ -41,17 +41,33 @@
 # ALL TIMES.
 
 #*******************************************************************************
-# Define the project for SDAccel
-create_project -name alphadata_host -dir . -force
-set_property platform vc690-admpcie7v3-1ddr-gen2 [current_project]
+# Define the solution for SDAccel
+create_solution -name alphadata_host -dir . -force
+add_device -vbnv xilinx:adm-pcie-7v3:1ddr:1.1
 
 # Host Compiler Flags
-set_property -name host_cflags -value "-g -Wall -D FPGA_DEVICE -D C_KERNEL -lrt -lm" -objects [current_project]
+set_property -name host_cflags -value "-g -Wall -D FPGA_DEVICE -D C_KERNEL" -objects [current_solution]
 
 # Host Source Files
 add_files "shm_host.c"
 
-compile_host -arch x86_64
+## Kernel Definition
+#create_kernel mmult -type c
+#add_files -kernel [get_kernels mmult] "mmult1.c"
+#
+## Define Binary Containers
+#create_opencl_binary mmult1
+#set_property region "OCL_REGION_0" [get_opencl_binary mmult1]
+#create_compute_unit -opencl_binary [get_opencl_binary mmult1] -kernel [get_kernels mmult] -name k1
+#
+## Compile the design for CPU based emulation
+#compile_emulation -flow cpu -opencl_binary [get_opencl_binary mmult1]
+#
+## Run the compiled application in CPU based emulation mode
+#run_emulation -flow cpu -args "mmult1.xclbin"
+
+# Compile the application to run on the accelerator card
+build_system
 
 # Package the application binaries
 package_system
