@@ -45,6 +45,10 @@ import htsjdk.samtools.SAMFileHeader
 
 import java.io.FileReader
 import java.io.BufferedReader
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.FileSystem
+import org.apache.hadoop.fs.Path
+import java.net.URI
 
 // for profiling
 import accUCLA.api._
@@ -76,7 +80,6 @@ object FastMapProfile {
     val fastaLocalInputPath = bwamemArgs.fastaInputPath        // the local BWA index files (bns, pac, and so on)
     val fastqHDFSInputPath = bwamemArgs.fastqHDFSInputPath     // the raw read file stored in HDFS
     val isPairEnd = bwamemArgs.isPairEnd                       // perform pair-end or single-end mapping
-    val fastqInputFolderNum = bwamemArgs.fastqInputFolderNum   // the number of folders generated in the HDFS for the raw reads
     val batchFolderNum = bwamemArgs.batchedFolderNum           // the number of raw read folders in a batch to be processed
     val isPSWBatched = bwamemArgs.isPSWBatched                 // whether the pair-end Smith Waterman is performed in a batched way
     val subBatchSize = bwamemArgs.subBatchSize                 // the number of reads to be processed in a subbatch
@@ -92,6 +95,15 @@ object FastMapProfile {
     var seqDict: SequenceDictionary = null
     var readGroupDict: RecordGroupDictionary = null
     var readGroup: RecordGroup = null
+
+    // get HDFS information
+    val conf: Configuration = new Configuration
+    val hdfs: FileSystem = FileSystem.get(new URI(fastqHDFSInputPath), conf)
+    val status = hdfs.listStatus(new Path(fastqHDFSInputPath))
+    var fastqInputFolderNum = status.size                      // the number of folders generated in the HDFS for the raw reads
+    bwamemArgs.fastqInputFolderNum = fastqInputFolderNum       // the number of folders generated in the HDFS for the raw reads
+    println("HDFS master: " + hdfs.getUri.toString)
+    println("Input HDFS folder number: " + bwamemArgs.fastqInputFolderNum)
 
     if(samHeader.bwaSetReadGroup(readGroupString)) {
       println("Head line: " + samHeader.readGroupLine)
@@ -162,21 +174,21 @@ object FastMapProfile {
   
   private def printProfiler(swProfile: SWBatchTimeBreakdown) {
     println("Summary:")
-    println("generatedChainTime: " + (swProfile.generatedChainTime.asInstanceOf[Double] / 1E3))
-    println("filterChainTime: " + (swProfile.filterChainTime.asInstanceOf[Double] / 1E3))
-    println("chainToAlnTime: " + (swProfile.chainToAlnTime.asInstanceOf[Double] / 1E3))
-    println("sortAndDedupTime: " + (swProfile.sortAndDedupTime.asInstanceOf[Double] / 1E3))
+    println("generatedChainTime (s): " + (swProfile.generatedChainTime.asInstanceOf[Double] / 1E9))
+    println("filterChainTime (s): " + (swProfile.filterChainTime.asInstanceOf[Double] / 1E9))
+    println("chainToAlnTime (s): " + (swProfile.chainToAlnTime.asInstanceOf[Double] / 1E9))
+    println("sortAndDedupTime (s): " + (swProfile.sortAndDedupTime.asInstanceOf[Double] / 1E9))
     println("FPGATaskNum: " + swProfile.FPGATaskNum)
     println("CPUTaskNum: " + swProfile.CPUTaskNum)
-    println("Init SWBatch Time: " + (swProfile.initSWBatchTime.asInstanceOf[Double] / 1E9))
-    println("SWBatch Runtime: " + (swProfile.SWBatchRuntime.asInstanceOf[Double] / 1E9))
-    println("SWBatch running On FPGA Time: " + (swProfile.SWBatchOnFPGA.asInstanceOf[Double] / 1E9))
+    println("Init SWBatch Time (s): " + (swProfile.initSWBatchTime.asInstanceOf[Double] / 1E9))
+    println("SWBatch Runtime (s): " + (swProfile.SWBatchRuntime.asInstanceOf[Double] / 1E9))
+    println("SWBatch running On FPGA Time (s): " + (swProfile.SWBatchOnFPGA.asInstanceOf[Double] / 1E9))
     val swBatchOnCPU = swProfile.SWBatchRuntime - swProfile.SWBatchOnFPGA
-    println("SWBatch running On CPU Time: " + (swBatchOnCPU.asInstanceOf[Double] / 1E9))
-    println("Post Processing Time: " + (swProfile.postProcessSWBatchTime.asInstanceOf[Double] / 1E9))
-    println("FPGA Data Preparation Time: " + (swProfile.FPGADataPreProcTime.asInstanceOf[Double] / 1E9))
-    println("FPGA Routine Runtime: " + (swProfile.FPGARoutineRuntime.asInstanceOf[Double] / 1E9))
-    println("FPGA Data Post-Processing Time: " + (swProfile.FPGADataPostProcTime.asInstanceOf[Double] / 1E9))
+    println("SWBatch running On CPU Time (s): " + (swBatchOnCPU.asInstanceOf[Double] / 1E9))
+    println("Post Processing Time (s): " + (swProfile.postProcessSWBatchTime.asInstanceOf[Double] / 1E9))
+    println("FPGA Data Preparation Time (s): " + (swProfile.FPGADataPreProcTime.asInstanceOf[Double] / 1E9))
+    println("FPGA Routine Runtime (s): " + (swProfile.FPGARoutineRuntime.asInstanceOf[Double] / 1E9))
+    println("FPGA Data Post-Processing Time (s): " + (swProfile.FPGADataPostProcTime.asInstanceOf[Double] / 1E9))
   } 
  
 
@@ -279,7 +291,7 @@ object FastMapProfile {
 
       // loading reads
       println("Load FASTQ files")
-      val startLoadFASTQ = System.currentTimeMillis
+      val startLoadFASTQ = System.nanoTime
       val pairEndFASTQRDDLoader = new FASTQRDDLoader(sc, fastqHDFSInputPath, fastqInputFolderNum)
       val restFolderNum = fastqInputFolderNum - i
       var pairEndFASTQRDD: RDD[PairEndFASTQRecord] = null
@@ -291,13 +303,13 @@ object FastMapProfile {
         pairEndFASTQRDD = pairEndFASTQRDDLoader.PairEndRDDLoadOneBatch(i, restFolderNum)
         i += restFolderNum
       }
-      val endLoadFASTQ = System.currentTimeMillis
+      val endLoadFASTQ = System.nanoTime
       val loadFASTQTime = endLoadFASTQ - startLoadFASTQ
-      println("Load FASTQ Time: " + loadFASTQTime)
+      println("Load FASTQ Time (s): " + loadFASTQTime.asInstanceOf[Double] / 1E9)
 
       // Worker1 (Map step)
       // *****   PROFILING    *******
-      val startTime = System.currentTimeMillis
+      val startTime = System.nanoTime
 
       println("@Worker1") 
       var reads: RDD[PairEndReadType] = null
@@ -332,11 +344,11 @@ object FastMapProfile {
       }
 
       val readProfiles = pairEndFASTQRDD.mapPartitions(it2ArrayIt_W1)
-      readProfiles.cache
+      //readProfiles.cache
       val batchProfiles = readProfiles.map(s => s.swBatchTimeBreakdown).collect
 
       // *****   PROFILING    *******
-      val worker1EndTime = System.currentTimeMillis
+      val worker1EndTime = System.nanoTime
       worker1Time += (worker1EndTime - startTime)
       updateProfiler(swProfile, batchProfiles)
 
@@ -350,7 +362,7 @@ object FastMapProfile {
 //      val peStatPrepArray = peStatPrepRDD.collect
 //
 //      // *****   PROFILING    *******
-//      val calMetricsStartTime = System.currentTimeMillis
+//      val calMetricsStartTime = System.nanoTime
 //
 //      memPeStatCompute(bwaMemOptGlobal.value, peStatPrepArray, pes)
 //
@@ -362,7 +374,7 @@ object FastMapProfile {
 //      }
 //        
 //      // *****   PROFILING    *******
-//      val calMetricsEndTime = System.currentTimeMillis
+//      val calMetricsEndTime = System.nanoTime
 //      calMetricsTime += (calMetricsEndTime - calMetricsStartTime)
 //
 //      // Worker2 (Map step)
@@ -439,7 +451,7 @@ object FastMapProfile {
 //      }
 //
 //      // *****   PROFILING    *******
-//      val worker2EndTime = System.currentTimeMillis
+//      val worker2EndTime = System.nanoTime
 //      worker2Time += (worker2EndTime - calMetricsEndTime)
     }
 
@@ -449,8 +461,8 @@ object FastMapProfile {
       samHDFSWriter.close
 
     printProfiler(swProfile)
-    println("Worker1 Time: " + worker1Time)
-    println("Calculate Metrics Time: " + calMetricsTime)
+    println("Worker1 Time (s): " + worker1Time.asInstanceOf[Double] / 1E9)
+//    println("Calculate Metrics Time: " + calMetricsTime)
     println("SUCCEED!!!")
 //    println("Worker2 Time: " + worker2Time)
 //    println("n0 stats")

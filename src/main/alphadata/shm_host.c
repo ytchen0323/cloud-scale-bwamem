@@ -57,7 +57,7 @@ ALL TIMES.
 //#include "my_socket.h"
 #include "my_timer.h"
 
-#define TOTAL_TASK_NUMS 65536
+#define TOTAL_TASK_NUMS 1048576
 #define DATA_SIZE (TOTAL_TASK_NUMS*64)
 #define FPGA_RET_PARAM_NUM 5
 #define RESULT_SIZE TOTAL_TASK_NUMS*FPGA_RET_PARAM_NUM
@@ -162,8 +162,8 @@ void print_current_time_with_ns (void)
 int main(int argc, char** argv)
 {
   int err;                            // error code returned from api calls     
-  int* a = (int*) malloc(DATA_SIZE * sizeof(int));                   // original data set given to device
-  int* results = (int*) malloc(RESULT_SIZE * sizeof(int));           // results returned from device
+  int* a = NULL; // input pointer
+  int* results = NULL; // output pointer
   unsigned int correct;               // number of correct results returned
 
   size_t global[2];                   // global domain size for our calculation
@@ -391,7 +391,6 @@ int main(int argc, char** argv)
     //gettimeofday(&tv, NULL);    
     //double time_in_mill = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ; // convert tv_sec & tv_usec to millisecond
     //printf("Receive time (ms): %lf\n", time_in_mill);
-    print_current_time_with_ns();
 
     accTime (&socListenTime, &timer);
 
@@ -433,7 +432,8 @@ int main(int argc, char** argv)
     }
 
     //printf("Copy data to the array in the host\n");
-    memcpy(a, shm_addr + FLAG_NUM * sizeof(int), sizeof(int) * data_size);
+    a = (int *)(shm_addr + FLAG_NUM * sizeof(int));
+    results = (int *)(shm_addr + FLAG_NUM * sizeof(int));
     
     accTime (&socSendTime, &timer);
 
@@ -503,7 +503,6 @@ int main(int argc, char** argv)
 
     // put data back to shared memory
     //printf("Put data back to the shared memory\n");
-    memcpy(shm_addr + FLAG_NUM * sizeof(int), results, sizeof(int) * FPGA_RET_PARAM_NUM * taskNum);
     *((int*)(shm_addr + sizeof(int))) = DONE;
 
     //printf("\n************* Task finished! *************\n");

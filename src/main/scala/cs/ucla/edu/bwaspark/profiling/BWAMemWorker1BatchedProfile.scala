@@ -65,7 +65,7 @@ object BWAMemWorker1BatchedProfile {
                            ): Array[ReadType] = { //all possible alignments for all the reads  
 
     // *****    PROFILING     *****
-    val startTime = System.currentTimeMillis
+    val startTime = System.nanoTime
 
     val readArray = new Array[Array[Byte]](numOfReads)
     val lenArray = new Array[Int](numOfReads)
@@ -85,7 +85,7 @@ object BWAMemWorker1BatchedProfile {
     }
 
     // *****   PROFILING    *******
-    val generatedChainEndTime = System.currentTimeMillis
+    val generatedChainEndTime = System.nanoTime
     profileData.generatedChainTime = generatedChainEndTime - startTime
 
     val readRetArray = new Array[ReadType](numOfReads)
@@ -128,13 +128,13 @@ object BWAMemWorker1BatchedProfile {
     if (debugLevel == 1) println("Finished the pre-processing part")
 
     // *****   PROFILING    *******                
-    val filterChainEndTime = System.currentTimeMillis
+    val filterChainEndTime = System.nanoTime
     profileData.filterChainTime = filterChainEndTime - generatedChainEndTime
 
     memChainToAlnBatchedProfile(opt, bns.l_pac, pac, lenArray, readArray, numOfReads, preResultsOfSW, chainsFilteredArray, regArrays, runOnFPGA, threshold, profileData)
 
     // *****   PROFILING    *******
-    val chainToAlnEndTime = System.currentTimeMillis
+    val chainToAlnEndTime = System.nanoTime
     profileData.chainToAlnTime = chainToAlnEndTime - filterChainEndTime    
 
     if (debugLevel == 1) println("Finished the batched-processing part")
@@ -148,7 +148,7 @@ object BWAMemWorker1BatchedProfile {
     }
 
     // *****   PROFILING    *******
-    val sortAndDedupEndTime = System.currentTimeMillis
+    val sortAndDedupEndTime = System.nanoTime
     profileData.sortAndDedupTime = sortAndDedupEndTime - chainToAlnEndTime
 
     readRetArray
