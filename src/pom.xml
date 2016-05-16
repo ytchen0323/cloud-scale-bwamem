@@ -4,7 +4,7 @@
 
   <groupId>cs.ucla.edu</groupId>
   <artifactId>jniNative</artifactId>
-  <version>0.2.1</version>
+  <version>0.2.2</version>
   <name>JNI Pair-End Smith-Waterman AVX Library</name>
     
   <packaging>so</packaging>
@@ -16,7 +16,7 @@
       <version>0.2.2</version>
       <type>jar</type>
       <scope>system</scope>
-      <systemPath>../target/cloud-scale-bwamem-0.2.2-assembly.jar</systemPath>
+      <systemPath>/curr/pengwei/github/cloud-scale-bwamem/target/cloud-scale-bwamem-0.2.2.jar</systemPath>
     </dependency>   
   </dependencies>
   

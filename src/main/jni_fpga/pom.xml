@@ -4,7 +4,7 @@
 
   <groupId>cs.ucla.edu</groupId>
   <artifactId>jniSWExtend</artifactId>
-  <version>0.2.1</version>
+  <version>0.2.2</version>
   <name>JNI Smith-Waterman Extend on FPGA</name>
     
   <packaging>so</packaging>
@@ -13,10 +13,10 @@
     <dependency>
       <groupId>cs.ucla.edu</groupId>
       <artifactId>cloud-scale-bwamem</artifactId>
-      <version>0.2.0</version>
+      <version>0.2.2</version>
       <type>jar</type>
       <scope>system</scope>
-      <systemPath>/home/ytchen/cs-bwamem/0.2.0/cloud-scale-bwamem/target/cloud-scale-bwamem-0.2.0-assembly.jar</systemPath>
+      <systemPath>/curr/pengwei/github/cloud-scale-bwamem/target/cloud-scale-bwamem-0.2.2.jar</systemPath>
     </dependency>   
   </dependencies>
   
