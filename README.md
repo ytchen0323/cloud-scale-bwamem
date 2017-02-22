@@ -12,7 +12,7 @@ Cloud-scale BWAMEM (CS-BWAMEM) is an ultrafast and highly scalable aligner built
         <systemPath>/curr/pengwei/github/cloud-scale-bwamem/target/cloud-scale-bwamem-0.2.2.jar</systemPath>
       to your path:
       
-        <systemPath>/youpath/cloud-scale-bwamem-0.2.2/target/cloud-scale-bwamem-0.2.2.jar</systemPath>
+        <systemPath>/youpath/cloud-scale-bwamem/target/cloud-scale-bwamem-0.2.2.jar</systemPath>
 4. ./compile.pl
 
 # Upload FASTQ file(s) to HDFS
