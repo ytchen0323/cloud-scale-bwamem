@@ -6,7 +6,14 @@ Cloud-scale BWAMEM (CS-BWAMEM) is an ultrafast and highly scalable aligner built
 # Build and Install
 1. git clone git@github.com:ytchen0323/cloud-scale-bwamem.git
 2. cd cloud-scale-bwamem
-3. ./compile.pl
+3. updated absolute path in two pom.xml: src/pom.xml and  src/main/jni_fpga/pom.xml   
+      update:
+      
+        <systemPath>/curr/pengwei/github/cloud-scale-bwamem/target/cloud-scale-bwamem-0.2.2.jar</systemPath>
+      to your path:
+      
+        <systemPath>/youpath/cloud-scale-bwamem/target/cloud-scale-bwamem-0.2.2.jar</systemPath>
+4. ./compile.pl
 
 # Upload FASTQ file(s) to HDFS
   - commands: upload-fastq [-bn INT] isPairEnd filePartitionNum inputFASTQFilePath1 [inputFASTQFilePath2] outFileHDFSPath
